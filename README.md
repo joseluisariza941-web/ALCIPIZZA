@@ -48,7 +48,6 @@ El acceso del personal está detrás del icono 🔒 de la esquina inferior derec
 ## Soporte técnico
 
 ING. José Luis Ariza  
-WhatsApp: 3212292035 · Correo: joseluisariza941@gmail.com
 
 ---
 
