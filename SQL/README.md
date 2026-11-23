@@ -112,7 +112,7 @@ SELECT TOP 20 Id, Fecha, Destino, Cliente, Total, Estado, PagoEstado FROM dbo.Pe
 ## Soporte técnico
 
 ING. José Luis Ariza  
-WhatsApp: 3212292035 · Correo: joseluisariza941@gmail.com
+
 
 ---
 
