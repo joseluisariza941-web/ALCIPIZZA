@@ -1,0 +1,707 @@
+{
+ "platos": [
+  {
+   "id": 1,
+   "c": "Pizzas",
+   "n": "Pizza",
+   "e": "🍕",
+   "v": [
+    {
+     "t": "Porción",
+     "p": 6000,
+     "m": 0.15
+    },
+    {
+     "t": "Pequeña",
+     "p": 16000,
+     "m": 0.5
+    },
+    {
+     "t": "Mediana",
+     "p": 28000,
+     "m": 1
+    },
+    {
+     "t": "Grande",
+     "p": 38000,
+     "m": 1.5
+    }
+   ],
+   "i": {
+    "Masa pizza": {
+     "q": 300,
+     "u": "g"
+    },
+    "Queso": {
+     "q": 150,
+     "u": "g"
+    },
+    "Tomate": {
+     "q": 60,
+     "u": "g"
+    },
+    "Pollo": {
+     "q": 60,
+     "u": "g"
+    }
+   },
+   "sa": [
+    "Ketchup",
+    "Ají"
+   ],
+   "ex": [],
+   "img": ""
+  },
+  {
+   "id": 2,
+   "c": "Hamburguesas",
+   "n": "Hamburguesa",
+   "e": "🍔",
+   "v": [
+    {
+     "t": "Sencilla",
+     "p": 14000,
+     "m": 1
+    },
+    {
+     "t": "Doble carne",
+     "p": 20000,
+     "m": 1.8
+    }
+   ],
+   "i": {
+    "Pan": {
+     "q": 1,
+     "u": null
+    },
+    "Carne": {
+     "q": 120,
+     "u": "g"
+    },
+    "Queso": {
+     "q": 25,
+     "u": "g"
+    },
+    "Tomate": {
+     "q": 30,
+     "u": "g"
+    },
+    "Lechuga": {
+     "q": 15,
+     "u": "g"
+    }
+   },
+   "sa": [
+    "Ketchup",
+    "Mayonesa",
+    "Mostaza"
+   ],
+   "ex": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "img": ""
+  },
+  {
+   "id": 3,
+   "c": "Arepas",
+   "n": "Arepa rellena",
+   "e": "🫓",
+   "v": [
+    {
+     "t": "Carne",
+     "p": 12000,
+     "m": 1
+    },
+    {
+     "t": "Pollo",
+     "p": 12000,
+     "m": 1
+    },
+    {
+     "t": "Mixta",
+     "p": 14000,
+     "m": 1
+    },
+    {
+     "t": "Queso",
+     "p": 10000,
+     "m": 1
+    }
+   ],
+   "i": {
+    "Arepa": {
+     "q": 1,
+     "u": null
+    },
+    "Queso": {
+     "q": 40,
+     "u": "g"
+    },
+    "Carne": {
+     "q": 80,
+     "u": "g"
+    }
+   },
+   "sa": [
+    "Ají",
+    "Mayonesa"
+   ],
+   "ex": [],
+   "img": ""
+  },
+  {
+   "id": 4,
+   "c": "Tacos",
+   "n": "Tacos mexicanos",
+   "e": "🌮",
+   "v": [
+    {
+     "t": "Carne",
+     "p": 13000,
+     "m": 1
+    },
+    {
+     "t": "Pollo",
+     "p": 13000,
+     "m": 1
+    },
+    {
+     "t": "Mixto",
+     "p": 15000,
+     "m": 1
+    }
+   ],
+   "i": {
+    "Tortilla": {
+     "q": 3,
+     "u": null
+    },
+    "Carne": {
+     "q": 80,
+     "u": "g"
+    },
+    "Queso": {
+     "q": 30,
+     "u": "g"
+    },
+    "Tomate": {
+     "q": 30,
+     "u": "g"
+    }
+   },
+   "sa": [
+    "Ají",
+    "Salsa rosada",
+    "Piña"
+   ],
+   "ex": [],
+   "img": ""
+  },
+  {
+   "id": 5,
+   "c": "Perros",
+   "n": "Perro caliente",
+   "e": "🌭",
+   "v": [
+    {
+     "t": "Sencillo",
+     "p": 9000,
+     "m": 1
+    },
+    {
+     "t": "Perro Loco",
+     "p": 15000,
+     "m": 1.5
+    },
+    {
+     "t": "Mixto",
+     "p": 13000,
+     "m": 1.3
+    }
+   ],
+   "i": {
+    "Pan": {
+     "q": 1,
+     "u": null
+    },
+    "Salchicha": {
+     "q": 1,
+     "u": null
+    },
+    "Queso": {
+     "q": 20,
+     "u": "g"
+    },
+    "Papas": {
+     "q": 25,
+     "u": "g"
+    }
+   },
+   "sa": [
+    "Ketchup",
+    "Mayonesa",
+    "Mostaza",
+    "Piña"
+   ],
+   "ex": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "img": ""
+  },
+  {
+   "id": 6,
+   "c": "Salchipapas",
+   "n": "Salchipapa",
+   "e": "🍟",
+   "v": [
+    {
+     "t": "Sencilla",
+     "p": 12000,
+     "m": 1
+    },
+    {
+     "t": "Grande",
+     "p": 18000,
+     "m": 1.6
+    }
+   ],
+   "i": {
+    "Papas": {
+     "q": 250,
+     "u": "g"
+    },
+    "Salchicha": {
+     "q": 1,
+     "u": null
+    },
+    "Queso": {
+     "q": 30,
+     "u": "g"
+    }
+   },
+   "sa": [
+    "Ketchup",
+    "Mayonesa",
+    "Salsa rosada",
+    "Salsa BBQ"
+   ],
+   "ex": [],
+   "img": ""
+  },
+  {
+   "id": 7,
+   "c": "Bebidas",
+   "n": "Coca-Cola",
+   "e": "🥤",
+   "v": [
+    {
+     "t": "Pequeña",
+     "p": 2000,
+     "m": 1
+    },
+    {
+     "t": "Personal 300ml",
+     "p": 3000,
+     "m": 1
+    },
+    {
+     "t": "Mediana 1.5L",
+     "p": 7000,
+     "m": 1
+    },
+    {
+     "t": "Grande 3L",
+     "p": 11000,
+     "m": 1
+    }
+   ],
+   "i": {
+    "Coca-Cola": {
+     "q": 1,
+     "u": null
+    }
+   },
+   "sa": [],
+   "ex": [],
+   "img": ""
+  },
+  {
+   "id": 8,
+   "c": "Bebidas",
+   "n": "Pepsi",
+   "e": "🥤",
+   "v": [
+    {
+     "t": "Pequeña",
+     "p": 2000,
+     "m": 1
+    },
+    {
+     "t": "Personal 300ml",
+     "p": 3000,
+     "m": 1
+    },
+    {
+     "t": "Mediana 1.5L",
+     "p": 7000,
+     "m": 1
+    },
+    {
+     "t": "Grande 3L",
+     "p": 11000,
+     "m": 1
+    }
+   ],
+   "i": {
+    "Pepsi": {
+     "q": 1,
+     "u": null
+    }
+   },
+   "sa": [],
+   "ex": [],
+   "img": ""
+  }
+ ],
+ "extras": [
+  {
+   "id": 1,
+   "n": "Papas pequeña",
+   "ins": "Papas",
+   "q": 250,
+   "u": "g",
+   "p": 3000,
+   "grp": "papas"
+  },
+  {
+   "id": 2,
+   "n": "Papas mediana",
+   "ins": "Papas",
+   "q": 500,
+   "u": "g",
+   "p": 5000,
+   "grp": "papas"
+  },
+  {
+   "id": 3,
+   "n": "Papas grande",
+   "ins": "Papas",
+   "q": 1000,
+   "u": "g",
+   "p": 9000,
+   "grp": "papas"
+  },
+  {
+   "id": 4,
+   "n": "Queso extra",
+   "ins": "Queso",
+   "q": 30,
+   "u": "g",
+   "p": 2000,
+   "grp": ""
+  },
+  {
+   "id": 5,
+   "n": "Carne extra",
+   "ins": "Carne",
+   "q": 100,
+   "u": "g",
+   "p": 5000,
+   "grp": ""
+  }
+ ],
+ "ins": {
+  "Pan": {
+   "u": "und",
+   "s": 120,
+   "c": 120,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Carne": {
+   "u": "lb",
+   "s": 18,
+   "c": 18,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Pollo": {
+   "u": "g",
+   "s": 6000,
+   "c": 6000,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Queso": {
+   "u": "g",
+   "s": 3000,
+   "c": 3000,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Tomate": {
+   "u": "kg",
+   "s": 3,
+   "c": 3,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Lechuga": {
+   "u": "g",
+   "s": 1500,
+   "c": 1500,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Papas": {
+   "u": "kg",
+   "s": 50,
+   "c": 50,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Salchicha": {
+   "u": "und",
+   "s": 60,
+   "c": 60,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Masa pizza": {
+   "u": "kg",
+   "s": 10,
+   "c": 10,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Arepa": {
+   "u": "und",
+   "s": 60,
+   "c": 60,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Tortilla": {
+   "u": "und",
+   "s": 60,
+   "c": 60,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Coca-Cola": {
+   "u": "und",
+   "s": 24,
+   "c": 24,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Pepsi": {
+   "u": "und",
+   "s": 24,
+   "c": 24,
+   "k": "i",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Ketchup": {
+   "u": "g",
+   "s": 2000,
+   "c": 2000,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Mayonesa": {
+   "u": "g",
+   "s": 2000,
+   "c": 2000,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Mostaza": {
+   "u": "g",
+   "s": 1000,
+   "c": 1000,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Salsa rosada": {
+   "u": "g",
+   "s": 1500,
+   "c": 1500,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Salsa BBQ": {
+   "u": "g",
+   "s": 1500,
+   "c": 1500,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Piña": {
+   "u": "g",
+   "s": 1500,
+   "c": 1500,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  },
+  "Ají": {
+   "u": "g",
+   "s": 800,
+   "c": 800,
+   "k": "s",
+   "sur": "tienda",
+   "f": null,
+   "cost": 0,
+   "by": "",
+   "ed": 0
+  }
+ },
+ "cfg": {
+  "logo": "",
+  "bg": "",
+  "n": "Alcipizza",
+  "w1": "Tu próximo antojo está a un clic",
+  "w2": "Calidad, sabor y amor en cada preparación.",
+  "w3": "Descubre nuestro menú y disfruta tus comidas rápidas favoritas",
+  "w4": "Todo a tu gusto",
+  "tel": "3108819617",
+  "mesas": 8,
+  "h": [
+   [
+    18,
+    22
+   ],
+   [
+    18,
+    22
+   ],
+   null,
+   [
+    18,
+    22
+   ],
+   [
+    18,
+    22
+   ],
+   [
+    18,
+    22
+   ],
+   [
+    18,
+    22
+   ]
+  ],
+  "pay": {
+   "ef": {
+    "n": "Efectivo",
+    "on": 1
+   },
+   "nq": {
+    "n": "Nequi",
+    "on": 1,
+    "num": ""
+   },
+   "br": {
+    "n": "Bre-B",
+    "on": 1,
+    "num": ""
+   },
+   "bc": {
+    "n": "Bancolombia",
+    "on": 1,
+    "num": ""
+   },
+   "dv": {
+    "n": "Daviplata",
+    "on": 1,
+    "num": ""
+   }
+  }
+ }
+}

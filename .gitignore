@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.env
+*.log
+.playwright-mcp/
+client/test-results/
+client/playwright-report/
+
+# Paquete para Hostinger (node php-api/scripts/build-deploy.mjs)
+deploy/
+
+# Carpeta personal (notas, credenciales, borradores): nunca se sube
+private/
+
+# Herramientas de IA y archivos locales: nunca se suben
+.claude/
+.opencode/
+opencode.json
+opencode.jsonc
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.cursor/
+.github/copilot-instructions.md
+.mcp.json
+
+# Secretos
+*.pem
+*.key
+id_ed25519*
+alcipizza_deploy*

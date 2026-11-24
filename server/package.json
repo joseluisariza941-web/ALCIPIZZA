@@ -1,0 +1,29 @@
+{
+  "name": "alcipizza-server",
+  "version": "2.0.0",
+  "description": "Base de datos de Alcipizza (migraciones y datos iniciales con knex) y pruebas de la API en PHP",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate": "knex --knexfile knexfile.js migrate:latest",
+    "rollback": "knex --knexfile knexfile.js migrate:rollback --all",
+    "seed": "knex --knexfile knexfile.js seed:run",
+    "db:reset": "npm run rollback && npm run migrate && npm run seed"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^18.0.10",
+    "knex": "^3.3.0",
+    "mysql2": "^3.24.6"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.2",
+    "vitest": "^5.1.1"
+  }
+}

@@ -1,0 +1,29 @@
+# MySQL para desarrollo de Alcipizza.
+# Uso:  docker compose up -d
+# Puerto del host: MYSQL_PORT (por defecto 3310, porque 3306/3308/3311/3321/3322 ya están en uso en este equipo).
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: alcipizza-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_Alcipizza_2026}
+      MYSQL_DATABASE: ${DB_NAME:-alcipizza}
+      MYSQL_USER: ${DB_USER:-alcipizza}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-Alcipizza_Dev_2026}
+      TZ: America/Bogota
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=-05:00
+    ports:
+      - "${MYSQL_PORT:-3310}:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root_Alcipizza_2026}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  mysqldata:

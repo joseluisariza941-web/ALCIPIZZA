@@ -1,0 +1,83 @@
+# Alcipizza en Hostinger (public_html). Compatible con Apache 2.4 y LiteSpeed.
+#   /api y /api/*   → index.php (API en PHP; su código vive fuera de public_html, en ../alcipizza-api)
+#   archivos reales → se entregan tal cual (build de React: index.html, assets/…)
+#   /assets/* que no exista → 404 (no index.html)
+#   resto           → index.html (rutas de React Router: /cocina, /tirilla/5, …)
+
+Options -Indexes -MultiViews
+DirectoryIndex index.html
+AddDefaultCharset utf-8
+ServerSignature Off
+
+<IfModule mod_mime.c>
+    AddType text/javascript .js .mjs
+    AddType application/manifest+json .webmanifest
+    AddType font/woff2 .woff2
+    AddType image/webp .webp
+</IfModule>
+
+# Archivos ocultos (.env, .git, .htaccess, …): nunca se sirven.
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Forzar HTTPS (también detrás de proxy/CDN que manda X-Forwarded-Proto).
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+    # Carpetas/archivos ocultos en cualquier nivel → 403 (salvo .well-known, que usa el SSL).
+    RewriteRule (^|/)\.(?!well-known(/|$)) - [F,L]
+
+    # API
+    RewriteRule ^api(/.*)?$ index.php [QSA,L]
+
+    # Archivos que existen: tal cual.
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Asset inexistente: 404 real (evita entregar HTML como si fuera JS/CSS).
+    RewriteRule ^assets/ - [R=404,L]
+
+    # SPA
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# Cabeceras para lo estático (index.php pone las suyas con App::cabeceras()).
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html|js|mjs|css|png|jpe?g|gif|webp|avif|svg|ico|json|webmanifest|txt|xml|woff2?|ttf|map)$">
+        Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; font-src 'self' data: https://fonts.gstatic.com; form-action 'self'; frame-ancestors 'self'; img-src 'self' data: blob: https:; object-src 'none'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; upgrade-insecure-requests"
+        Header always set Cross-Origin-Opener-Policy "same-origin"
+        Header always set Cross-Origin-Resource-Policy "same-origin"
+        Header always set Origin-Agent-Cluster "?1"
+        Header always set Referrer-Policy "no-referrer"
+        Header always set X-Content-Type-Options "nosniff"
+        Header always set X-DNS-Prefetch-Control "off"
+        Header always set X-Download-Options "noopen"
+        Header always set X-Frame-Options "SAMEORIGIN"
+        Header always set X-Permitted-Cross-Domain-Policies "none"
+        Header always set X-XSS-Protection "0"
+        Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Header set Cache-Control "public, max-age=3600"
+    </FilesMatch>
+    # index.html (también cuando llega por la regla SPA): siempre revalidar para ver la versión nueva.
+    <FilesMatch "\.html$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+    # Build de Vite (assets/nombre-HASH8.ext): el nombre cambia en cada versión → caché de 1 año.
+    # (El logo /assets/logo.png no lleva hash y se queda con 1 hora.)
+    <FilesMatch "-[A-Za-z0-9_-]{8}\.(js|mjs|css|png|jpe?g|gif|webp|avif|svg|woff2?|ttf)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+    Header always unset X-Powered-By
+</IfModule>
