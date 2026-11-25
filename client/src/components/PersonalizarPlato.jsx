@@ -28,7 +28,7 @@ export default function PersonalizarPlato({ plato: p, onAgregar, onCerrar }) {
         <div className="row">
           {p.variantes.map(v => (
             <button key={v.id} className={'chip vr' + (v.id === varianteId ? ' on' : '')} aria-pressed={v.id === varianteId}
-              onClick={() => setVariante(v.id)}>{v.nombre} · {pesos(v.precio)}</button>
+              onClick={() => setVariante(v.id)}>{v.nombre} · {v.precioPromo != null ? <><s>{pesos(v.precio)}</s> {pesos(v.precioPromo)}</> : pesos(v.precio)}</button>
           ))}
         </div>
         {p.extras?.length > 0 && <>

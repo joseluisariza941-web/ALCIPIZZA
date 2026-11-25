@@ -4,7 +4,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api.js';
 import Shell from '../components/Shell.jsx';
 import Recibo from '../components/Recibo.jsx';
-import { leerTirilla } from '../cliente/tirillaLocal.js';
+import { toast } from '../components/toast.jsx';
+import { guardarEdicion, leerTirilla } from '../cliente/tirillaLocal.js';
 
 const FINALES = ['entregado', 'cancelado'];
 
@@ -27,6 +28,7 @@ function Tirilla({ intervalo }) {
   const token = tokenDe(id, sp.get('token'));
   const [pedido, setPedido] = useState(null);
   const [negado, setNegado] = useState(!token);
+  const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
     if (!token) { setNegado(true); return undefined; }
@@ -49,6 +51,30 @@ function Tirilla({ intervalo }) {
     return () => { vivo = false; clearTimeout(timer); };
   }, [id, token, intervalo]);
 
+  const recargar = async () => {
+    const p = await api.get(`/api/pedidos/${id}?token=${encodeURIComponent(token)}`);
+    setPedido(p);
+    return p;
+  };
+
+  const cancelar = async () => {
+    if (!window.confirm('¿Seguro que quieres cancelar tu pedido?')) return;
+    setOcupado(true);
+    try {
+      setPedido(await api.post(`/api/pedidos/${id}/cancelar`, { token }));
+    } catch (e) {
+      toast(e.message);
+      if (e.status === 409) { try { await recargar(); } catch { /* sin conexión */ } }
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const editar = () => {
+    guardarEdicion({ id: pedido.id, token, pedido });
+    navigate('/');
+  };
+
   if (negado) {
     return (
       <div className="card" style={{ maxWidth: 480, margin: '3rem auto', textAlign: 'center' }}>
@@ -59,5 +85,5 @@ function Tirilla({ intervalo }) {
     );
   }
   if (!pedido) return <p className="sm" style={{ textAlign: 'center', margin: '3rem 0' }}>Cargando tu tirilla…</p>;
-  return <Recibo pedido={pedido} onCerrar={() => navigate('/')} />;
+  return <Recibo pedido={pedido} onCerrar={() => navigate('/')} onCancelar={cancelar} onEditar={editar} cancelando={ocupado} />;
 }

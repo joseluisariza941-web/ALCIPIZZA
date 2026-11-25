@@ -7,11 +7,13 @@ export const CONFIG = {
     tel: '3001112233', mesas: 4, h: H_ABIERTO, logo: '', bg: '',
   },
   pagos: [
-    { codigo: 'ef', nombre: 'Efectivo', numero: '', activo: true },
-    { codigo: 'nq', nombre: 'Nequi', numero: '3009998877', activo: true },
+    { codigo: 'ef', nombre: 'Efectivo', numero: '', activo: true, qrUrl: null },
+    { codigo: 'nq', nombre: 'Nequi', numero: '3009998877', activo: true, qrUrl: null },
   ],
   abierto: true,
   suscripcionActiva: true,
+  promociones: [],
+  puntos: { activo: false, porMil: 1, puntosCanje: 100, descuentoCanje: 1000 },
 };
 
 export const MENU = [
@@ -34,8 +36,10 @@ export const MENU = [
 
 export const PEDIDO = {
   id: 7, creadoEn: '2026-11-23T19:30:00', origen: 'web', mesera: null, destino: 'Domicilio', cliente: 'Juan',
-  direccion: 'Cra 1 #2-3', telefono: '3001234567', total: 22000, estado: 'nuevo', pagoEstado: 'pendiente',
+  direccion: 'Cra 1 #2-3', telefono: '3001234567', celular: null, subtotal: 22000, descuentoPromo: 0,
+  promocion: null, puntosCanjeados: 0, descuentoPuntos: 0, puntosGanados: 0, editadoEn: null,
+  canceladoPorCliente: false, total: 22000, estado: 'nuevo', pagoEstado: 'pendiente',
   metodoPago: { codigo: 'nq', nombre: 'Nequi' }, pagadoEn: null, cobradoPor: null,
-  items: [{ id: 1, platoId: 2, nombre: 'Hamburguesa', emoji: '🍔', variante: 'Doble carne', precioUnitario: 22000, nota: '',
+  items: [{ id: 1, platoId: 2, varianteId: 22, nombre: 'Hamburguesa', emoji: '🍔', variante: 'Doble carne', precioUnitario: 22000, nota: '',
     extras: [{ id: 4, nombre: 'Queso extra', precio: 2000 }], salsas: ['Ketchup'], sin: ['Tomate'] }],
 };

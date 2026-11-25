@@ -6,8 +6,8 @@ import { mockApi, renderWith } from '../test/helpers.jsx';
 import { CONFIG, PEDIDO } from '../cliente/fixtures.js';
 import TirillaPage from './TirillaPage.jsx';
 
-function montar(ruta, pedido = PEDIDO, intervalo = 5000) {
-  const f = mockApi({ 'GET /api/public/config': CONFIG, 'GET /api/pedidos/7': pedido });
+function montar(ruta, pedido = PEDIDO, intervalo = 5000, extra = {}) {
+  const f = mockApi({ 'GET /api/public/config': CONFIG, 'GET /api/pedidos/7': pedido, 'GET /api/auth/csrf': { csrfToken: 't' }, ...extra });
   renderWith(
     <Routes>
       <Route path="/tirilla/:id" element={<TirillaPage intervalo={intervalo} />} />
@@ -116,5 +116,127 @@ describe('TirillaPage', () => {
     montar('/tirilla/7?token=abc', { ...PEDIDO, estado: 'cancelado' });
     const r = await rc();
     expect(await r.findByText('❌ Pedido cancelado')).toBeInTheDocument();
+  });
+});
+
+describe('TirillaPage · cancelar y editar', () => {
+  it('en estado nuevo muestra "Cancelar pedido" y "Editar pedido"', async () => {
+    montar('/tirilla/7?token=abc');
+    const r = await rc();
+    expect(await r.findByRole('button', { name: 'Cancelar pedido' })).toBeInTheDocument();
+    expect(r.getByRole('button', { name: 'Editar pedido' })).toBeInTheDocument();
+  });
+
+  it('cancelar pide confirmación, llama a la API con el token y refresca el estado', async () => {
+    const confirmar = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmar);
+    let cuerpo;
+    montar('/tirilla/7?token=abc', PEDIDO, 5000, {
+      'POST /api/pedidos/7/cancelar': b => {
+        cuerpo = b;
+        return { ...PEDIDO, estado: 'cancelado', canceladoPorCliente: true };
+      },
+    });
+    const r = await rc();
+    await userEvent.click(await r.findByRole('button', { name: 'Cancelar pedido' }));
+    expect(confirmar).toHaveBeenCalled();
+    expect(await r.findByText('❌ Pedido cancelado')).toBeInTheDocument();
+    expect(cuerpo).toEqual({ token: 'abc' });
+    expect(r.queryByRole('button', { name: 'Cancelar pedido' })).not.toBeInTheDocument();
+    expect(r.queryByRole('button', { name: 'Editar pedido' })).not.toBeInTheDocument();
+  });
+
+  it('si no confirma, no cancela', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => false));
+    let llamados = 0;
+    const f = montar('/tirilla/7?token=abc', PEDIDO, 5000, {
+      'POST /api/pedidos/7/cancelar': b => { llamados++; return { ...PEDIDO, estado: 'cancelado' }; },
+    });
+    const r = await rc();
+    await userEvent.click(await r.findByRole('button', { name: 'Cancelar pedido' }));
+    expect(llamados).toBe(0);
+    expect(f.mock.calls.some(([url, o]) => String(url) === '/api/pedidos/7/cancelar' && o?.method === 'POST')).toBe(false);
+  });
+
+  it('si la API responde 409 NO_EDITABLE muestra el mensaje y recarga el estado', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    let n = 0;
+    montar('/tirilla/7?token=abc', () => ({ ...PEDIDO, estado: n++ === 0 ? 'nuevo' : 'preparando' }), 5000, {
+      'POST /api/pedidos/7/cancelar': { status: 409, body: { error: 'Tu pedido ya está en cocina', code: 'NO_EDITABLE' } },
+    });
+    const r = await rc();
+    await userEvent.click(await r.findByRole('button', { name: 'Cancelar pedido' }));
+    expect(await screen.findByText('Tu pedido ya está en cocina')).toHaveClass('toast');
+    await waitFor(() => expect(r.queryByRole('button', { name: 'Cancelar pedido' })).not.toBeInTheDocument());
+    expect(r.getByText('● Preparando')).toHaveClass('on');
+  });
+
+  it('editar guarda el pedido y vuelve al menú', async () => {
+    montar('/tirilla/7?token=abc');
+    const r = await rc();
+    await userEvent.click(await r.findByRole('button', { name: 'Editar pedido' }));
+    expect(await screen.findByText('inicio')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('alcipizza.edicion'))).toMatchObject({ id: 7, token: 'abc', pedido: { id: 7 } });
+  });
+
+  it('si ya está pagado no muestra "Editar pedido"', async () => {
+    montar('/tirilla/7?token=abc', { ...PEDIDO, pagoEstado: 'pagado' });
+    const r = await rc();
+    await r.findByText('PEDIDO #7');
+    expect(r.queryByRole('button', { name: 'Editar pedido' })).not.toBeInTheDocument();
+    expect(r.getByRole('button', { name: 'Cancelar pedido' })).toBeInTheDocument();
+  });
+
+  it('si ya no está en nuevo no muestra ninguno de los dos botones', async () => {
+    montar('/tirilla/7?token=abc', { ...PEDIDO, estado: 'preparando' });
+    const r = await rc();
+    await r.findByText('PEDIDO #7');
+    expect(r.queryByRole('button', { name: 'Cancelar pedido' })).not.toBeInTheDocument();
+    expect(r.queryByRole('button', { name: 'Editar pedido' })).not.toBeInTheDocument();
+  });
+});
+
+describe('TirillaPage · QR y puntos', () => {
+  it('muestra el QR del método de pago mientras no está pagado', async () => {
+    montar('/tirilla/7?token=abc', PEDIDO, 5000, {
+      'GET /api/public/config': {
+        ...CONFIG,
+        pagos: [
+          { codigo: 'ef', nombre: 'Efectivo', numero: '', activo: true, qrUrl: null },
+          { codigo: 'nq', nombre: 'Nequi', numero: '3009998877', activo: true, qrUrl: 'data:image/png;base64,BBB' },
+        ],
+      },
+    });
+    const r = await rc();
+    const img = await r.findByRole('img', { name: 'QR de pago Nequi' });
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,BBB');
+  });
+
+  it('no muestra el QR cuando el pedido ya está pagado', async () => {
+    montar('/tirilla/7?token=abc', { ...PEDIDO, pagoEstado: 'pagado' }, 5000, {
+      'GET /api/public/config': {
+        ...CONFIG,
+        pagos: [
+          { codigo: 'ef', nombre: 'Efectivo', numero: '', activo: true, qrUrl: null },
+          { codigo: 'nq', nombre: 'Nequi', numero: '3009998877', activo: true, qrUrl: 'data:image/png;base64,BBB' },
+        ],
+      },
+    });
+    const r = await rc();
+    await r.findByText('✅ Pagado con Nequi');
+    expect(r.queryByRole('img', { name: 'QR de pago Nequi' })).not.toBeInTheDocument();
+  });
+
+  it('muestra los puntos ganados cuando son mayores que cero', async () => {
+    montar('/tirilla/7?token=abc', { ...PEDIDO, puntosGanados: 22 });
+    const r = await rc();
+    expect(await r.findByText('Ganaste 22 puntos')).toBeInTheDocument();
+  });
+
+  it('no muestra puntos cuando no ganó', async () => {
+    montar('/tirilla/7?token=abc', { ...PEDIDO, puntosGanados: 0 });
+    const r = await rc();
+    await r.findByText('PEDIDO #7');
+    expect(r.queryByText(/Ganaste/)).not.toBeInTheDocument();
   });
 });

@@ -11,8 +11,8 @@ import { descargarPdf, pdfRecibo } from '../cliente/pdf.js';
 const PASOS = ['Recibido', 'Preparando', 'Listo', 'Entregado'];
 const ESTADOS = ['nuevo', 'preparando', 'listo', 'entregado'];
 
-/** @param {{ pedido: any, onCerrar: () => void, conWhatsApp?: boolean }} p  conWhatsApp: solo para el personal (el cliente no envía el pedido por WhatsApp). */
-export default function Recibo({ pedido: o, onCerrar, conWhatsApp = false }) {
+/** @param {{ pedido: any, onCerrar: () => void, conWhatsApp?: boolean, onCancelar?: () => void, onEditar?: () => void, cancelando?: boolean }} p  conWhatsApp: solo para el personal (el cliente no envía el pedido por WhatsApp). onCancelar/onEditar: solo la tirilla del cliente. */
+export default function Recibo({ pedido: o, onCerrar, conWhatsApp = false, onCancelar, onEditar, cancelando = false }) {
   const { config: c, pagos } = usePublicConfig();
   const mp = o.metodoPago?.nombre || '';
   const pm = pagos.find(x => x.codigo === o.metodoPago?.codigo);
@@ -36,6 +36,8 @@ export default function Recibo({ pedido: o, onCerrar, conWhatsApp = false }) {
         <p className="r" style={{ fontSize: '1.4rem' }}><b>TOTAL</b><b>{pesos(o.total)}</b></p>
         <p className="sm">{pagado ? '✅ Pagado con ' + mp : '⏳ Pago pendiente' + (mp ? ' · ' + mp : '')}</p>
         {pm?.numero && !pagado && <p className="sm">Transfiere a {pm.nombre}: <b>{pm.numero}</b></p>}
+        {pm?.qrUrl && !pagado && <p className="sm"><img src={pm.qrUrl} alt={`QR de pago ${pm.nombre}`} style={{ width: 160, maxWidth: '100%', display: 'block', margin: '.3rem auto' }} /></p>}
+        {o.puntosGanados > 0 && <p className="sm">Ganaste {o.puntosGanados} puntos</p>}
         {o.estado === 'cancelado'
           ? <p className="sm">❌ Pedido cancelado</p>
           : <div className="stp">{PASOS.map((s, i) => <b key={s} className={i <= si ? 'on' : ''}>{i <= si ? '●' : '○'} {s}</b>)}</div>}
@@ -47,6 +49,12 @@ export default function Recibo({ pedido: o, onCerrar, conWhatsApp = false }) {
           {conWhatsApp && <a className="btn s wa" target="_blank" rel="noopener noreferrer" href={waLink(o, c)}><IconoWhatsApp /> Enviar al WhatsApp</a>}
           <button className="btn s y" onClick={onCerrar}>Cerrar</button>
         </div>
+        {o.estado === 'nuevo' && (onCancelar || onEditar) && (
+          <div className="row no" style={{ marginTop: '.4rem' }}>
+            {onCancelar && <button className="btn s" disabled={cancelando} onClick={onCancelar}>Cancelar pedido</button>}
+            {onEditar && !pagado && <button className="btn s y" onClick={onEditar}>Editar pedido</button>}
+          </div>
+        )}
       </div>
     </Modal>
   );

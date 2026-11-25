@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { alternarExtra, crearItem, cuerpoPedido, totalCarrito, validarPedido } from './carrito.js';
+import {
+  alternarExtra, celularValido, crearItem, cuerpoCotizar, cuerpoPedido, formDePedido, itemsDePedido,
+  normalizarCelular, totalCarrito, validarPedido,
+} from './carrito.js';
 
 const hamburguesa = {
   id: 2, nombre: 'Hamburguesa', emoji: '🍔', categoria: 'Hamburguesas',
@@ -91,5 +94,77 @@ describe('cuerpoPedido (formato de docs/API.md, sin precios)', () => {
     expect(b.telefono).toBe('311');
     expect(b).not.toHaveProperty('direccion');
     expect(b).not.toHaveProperty('mesa');
+  });
+
+  it('envía el celular normalizado cuando se escribe', () => {
+    const b = cuerpoPedido(items, { destino: 'Domicilio', mesa: '', cliente: 'Ana', direccion: 'x', telefono: '311', metodoPago: 'ef', celular: '+57 300 123-4567' });
+    expect(b.celular).toBe('3001234567');
+    expect(b).not.toHaveProperty('canjearPuntos');
+  });
+
+  it('no envía celular si está vacío', () => {
+    const b = cuerpoPedido(items, { destino: 'Domicilio', mesa: '', cliente: 'Ana', direccion: 'x', telefono: '311', metodoPago: 'ef', celular: '' });
+    expect(b).not.toHaveProperty('celular');
+  });
+});
+
+describe('celular para puntos', () => {
+  it('acepta 10 dígitos que empiezan por 3, con o sin +57/espacios/guiones', () => {
+    expect(celularValido('3001234567')).toBe(true);
+    expect(celularValido('+57 300 123-4567')).toBe(true);
+    expect(normalizarCelular('+57 300 123-4567')).toBe('3001234567');
+  });
+
+  it('rechaza números incompletos o que no empiezan por 3', () => {
+    expect(celularValido('300123456')).toBe(false);
+    expect(celularValido('2001234567')).toBe(false);
+    expect(celularValido('')).toBe(false);
+  });
+
+  it('validarPedido solo lo exige si se escribió algo', () => {
+    const item = [{ precio: 1 }];
+    const base = { destino: 'Domicilio', mesa: '', cliente: 'Juan', direccion: 'Cra 1', telefono: '300', metodoPago: 'ef', celular: '' };
+    expect(validarPedido(item, base)).toBeNull();
+    expect(validarPedido(item, { ...base, celular: '123' })).toBe('Escribe un celular válido (10 dígitos que empiezan por 3)');
+    expect(validarPedido(item, { ...base, celular: '3001234567' })).toBeNull();
+  });
+});
+
+describe('cotizar (solo items y celular, el servidor calcula)', () => {
+  const items = [crearItem(hamburguesa, { varianteId: 22, extras: [4], sin: ['Tomate'], salsas: ['Ketchup'], nota: 'x' })];
+
+  it('manda items y normaliza el celular si viene', () => {
+    expect(cuerpoCotizar(items, { celular: '+57 300 123 4567' })).toEqual({
+      celular: '3001234567',
+      items: [{ platoId: 2, varianteId: 22, extras: [4], salsas: ['Ketchup'], sin: ['Tomate'], nota: 'x' }],
+    });
+  });
+
+  it('sin celular solo manda items y nunca montos ni canje', () => {
+    const b = cuerpoCotizar(items, {});
+    expect(b).toEqual({ items: [{ platoId: 2, varianteId: 22, extras: [4], salsas: ['Ketchup'], sin: ['Tomate'], nota: 'x' }] });
+    expect(JSON.stringify(b)).not.toMatch(/precio|total|canjear/i);
+  });
+});
+
+describe('editar un pedido existente', () => {
+  const pedido = {
+    id: 7, destino: 'En el local · Mesa 3', cliente: 'Ana', direccion: null, telefono: '3001234567',
+    celular: '3001234567', metodoPago: { codigo: 'nq', nombre: 'Nequi' },
+    items: [{ platoId: 2, varianteId: 22, nombre: 'Hamburguesa', emoji: '🍔', variante: 'Doble carne', precioUnitario: 22000,
+      extras: [{ id: 4, nombre: 'Queso extra' }], salsas: ['Ketchup'], sin: ['Tomate'], nota: 'x' }],
+  };
+
+  it('itemsDePedido vuelve a armar el carrito', () => {
+    expect(itemsDePedido(pedido)).toEqual([{
+      platoId: 2, varianteId: 22, extras: [4], salsas: ['Ketchup'], sin: ['Tomate'], nota: 'x',
+      emoji: '🍔', nombre: 'Hamburguesa', variante: 'Doble carne', extrasNombres: ['Queso extra'], precio: 22000,
+    }]);
+  });
+
+  it('formDePedido separa el destino de la mesa y conserva el celular', () => {
+    expect(formDePedido(pedido)).toEqual({
+      destino: 'En el local', mesa: '3', cliente: 'Ana', direccion: '', telefono: '3001234567', metodoPago: 'nq', celular: '3001234567',
+    });
   });
 });

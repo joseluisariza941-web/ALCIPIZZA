@@ -13,8 +13,8 @@ import { toast } from '../components/toast.jsx';
 import { logoDe, usePublicConfig } from '../components/ConfigContext.jsx';
 import { pesos } from '../cliente/formato.js';
 import { estaAbierto, filasHorario } from '../cliente/horario.js';
-import { cuerpoPedido, pideMesa, totalCarrito, validarPedido } from '../cliente/carrito.js';
-import { borrarTirilla, guardarTirilla, leerTirilla, urlTirilla } from '../cliente/tirillaLocal.js';
+import { DESTINOS, cuerpoCotizar, cuerpoPedido, formDePedido, itemsDePedido, pideMesa, totalCarrito, validarPedido } from '../cliente/carrito.js';
+import { borrarEdicion, guardarTirilla, leerEdicion, leerTirilla, urlTirilla } from '../cliente/tirillaLocal.js';
 
 export default function ClientePage() {
   return <Shell><Cliente /></Shell>;
@@ -76,24 +76,31 @@ function MiPedido() {
   return (
     <div className="card" style={{ background: 'var(--a2)', color: '#1c120a', marginBottom: '1rem' }}>
       <b>📦 Tu pedido #{o.id}: {o.estado === 'listo' ? '¡listo!' : o.estado}</b>{' '}
-      <button className="btn s" onClick={() => navigate(urlTirilla(t.id, t.token))}>Ver mi tirilla</button>{' '}
-      <button className="btn s y" onClick={() => { borrarTirilla(); setO(null); }}>Ocultar</button>
+      <button className="btn s" onClick={() => navigate(urlTirilla(t.id, t.token))}>Ver mi tirilla</button>
     </div>
   );
 }
 
 function Cliente() {
-  const { config: c, pagos: todos, suscripcionActiva } = usePublicConfig();
+  const { config: c, pagos: todos, suscripcionActiva, puntos, recargar } = usePublicConfig();
   const navigate = useNavigate();
   const pagos = todos.filter(x => x.activo !== false);
   const [platos, setPlatos] = useState([]);
   const [elegido, setElegido] = useState(null);
-  const [items, setItems] = useState([]);
-  const [form, setForm] = useState(() => formVacio());
+  const [edicion, setEdicion] = useState(leerEdicion);
+  const [items, setItems] = useState(() => (edicion ? itemsDePedido(edicion.pedido) : []));
+  const [form, setForm] = useState(() => (edicion ? formDePedido(edicion.pedido) : formVacio()));
   const [confirmar, setConfirmar] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [cotizacion, setCotizacion] = useState(null);
+  const domiciliosActivos = c.domiciliosActivos !== false;
+  const destinos = domiciliosActivos ? DESTINOS : DESTINOS.filter(d => d !== 'Domicilio');
   // Método de pago vigente: el elegido si sigue activo, si no el primero (como ticket() original).
-  const f = { ...form, metodoPago: pagos.some(x => x.codigo === form.metodoPago) ? form.metodoPago : pagos[0]?.codigo || '' };
+  const f = {
+    ...form, destino: destinos.includes(form.destino) ? form.destino : destinos[0],
+    metodoPago: pagos.some(x => x.codigo === form.metodoPago) ? form.metodoPago : pagos[0]?.codigo || '',
+  };
+  const itemsClave = JSON.stringify(items);
 
   useEffect(() => {
     let vivo = true;
@@ -101,6 +108,20 @@ function Cliente() {
       .catch(e => toast(e.message));
     return () => { vivo = false; };
   }, []);
+
+  useEffect(() => { if (edicion) borrarEdicion(); }, []);
+
+  useEffect(() => {
+    setCotizacion(null);
+    if (!items.length) return undefined;
+    let vivo = true;
+    const timer = setTimeout(() => {
+      api.post('/api/pedidos/cotizar', cuerpoCotizar(items))
+        .then(r => { if (vivo) setCotizacion(r); })
+        .catch(() => { if (vivo) setCotizacion(null); });
+    }, 300);
+    return () => { vivo = false; clearTimeout(timer); };
+  }, [itemsClave]);
 
   if (!suscripcionActiva) {
     return (
@@ -121,12 +142,30 @@ function Cliente() {
     setConfirmar(false);
     setEnviando(true);
     try {
-      const r = await api.post('/api/pedidos', cuerpoPedido(items, f));
-      guardarTirilla({ id: r.pedido.id, token: r.token });
-      setItems([]);
-      navigate(urlTirilla(r.pedido.id, r.token));
+      if (edicion) {
+        const r = await api.put(`/api/pedidos/${edicion.id}/cliente`, { token: edicion.token, ...cuerpoPedido(items, f) });
+        guardarTirilla({ id: r.id, token: edicion.token });
+        borrarEdicion();
+        setEdicion(null);
+        setItems([]);
+        navigate(urlTirilla(r.id, edicion.token));
+      } else {
+        const r = await api.post('/api/pedidos', cuerpoPedido(items, f));
+        guardarTirilla({ id: r.pedido.id, token: r.token });
+        setItems([]);
+        navigate(urlTirilla(r.pedido.id, r.token));
+      }
     } catch (e) {
       toast(e.message);
+      if (e.data?.code === 'NO_EDITABLE' && edicion) {
+        const t = edicion;
+        borrarEdicion();
+        setEdicion(null);
+        setEnviando(false);
+        setTimeout(() => navigate(urlTirilla(t.id, t.token)), 600);
+        return;
+      }
+      if (e.data?.code === 'DOMICILIOS_APAGADOS') recargar?.();
       setEnviando(false);
     }
   };
@@ -143,7 +182,8 @@ function Cliente() {
       <div className="cols">
         <div><MenuPlatos platos={platos} onElegir={setElegido} /></div>
         <PreTicket items={items} onQuitar={i => setItems(l => l.filter((_, j) => j !== i))} form={f} onForm={setForm}
-          pagos={pagos} mesas={c.mesas} onEnviar={enviar} enviando={enviando} />
+          pagos={pagos} mesas={c.mesas} onEnviar={enviar} enviando={enviando}
+          domiciliosActivos={domiciliosActivos} puntos={puntos} cotizacion={cotizacion} />
       </div>
       {elegido && <PersonalizarPlato plato={elegido} onCerrar={() => setElegido(null)}
         onAgregar={it => { setItems(l => [...l, it]); setElegido(null); }} />}
@@ -159,7 +199,12 @@ function Cliente() {
                 <b>{pesos(it.precio)}</b>
               </p>
             ))}
-            <hr /><p className="r" style={{ fontSize: '1.3rem' }}><b>Total</b><b>{pesos(totalCarrito(items))}</b></p>
+            <hr />
+            {cotizacion && <>
+              <p className="r"><span>Subtotal</span><span>{pesos(cotizacion.subtotal)}</span></p>
+              {cotizacion.descuentoPromo > 0 && <p className="r"><span>Descuento promoción</span><span>-{pesos(cotizacion.descuentoPromo)}</span></p>}
+            </>}
+            <p className="r" style={{ fontSize: '1.3rem' }}><b>Total</b><b>{pesos(cotizacion ? cotizacion.total : totalCarrito(items))}</b></p>
             <p className="sm" style={{ margin: '.5rem 0' }}>{resumen}</p>
             <div className="row">
               <button className="btn" onClick={confirmarEnvio}>✅ Confirmar y enviar</button>

@@ -1,5 +1,6 @@
 // El cliente web recuerda su último pedido ({id, token}) para ver solo su propia tirilla.
 const CLAVE = 'alcipizza.tirilla';
+const CLAVE_EDICION = 'alcipizza.edicion';
 
 /** @returns {{id:number, token:string}|null} */
 export function leerTirilla() {
@@ -20,3 +21,20 @@ export function borrarTirilla() {
 
 /** @param {number|string} id @param {string} token */
 export const urlTirilla = (id, token) => `/tirilla/${id}?token=${encodeURIComponent(token)}`;
+
+/** @returns {{id:number, token:string, pedido:any}|null} */
+export function leerEdicion() {
+  try {
+    const e = JSON.parse(localStorage.getItem(CLAVE_EDICION) || 'null');
+    return e && e.id && e.token && e.pedido ? e : null;
+  } catch { return null; }
+}
+
+/** @param {{id:number, token:string, pedido:any}} e */
+export function guardarEdicion(e) {
+  try { localStorage.setItem(CLAVE_EDICION, JSON.stringify(e)); } catch { /* almacenamiento bloqueado */ }
+}
+
+export function borrarEdicion() {
+  try { localStorage.removeItem(CLAVE_EDICION); } catch { /* almacenamiento bloqueado */ }
+}

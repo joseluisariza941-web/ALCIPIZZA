@@ -8,17 +8,25 @@ export const LOGO = '/assets/logo.png';
 export const CONFIG_INICIAL = {
   n: 'Alcipizza', w1: 'Tu próximo antojo está a un clic', w2: 'Calidad, sabor y amor en cada preparación.',
   w3: 'Descubre nuestro menú y disfruta tus comidas rápidas favoritas', w4: 'Todo a tu gusto', tel: '3108819617', mesas: 8,
-  h: [[18, 22], null, [18, 22], [18, 22], [18, 22], [18, 22], [18, 22]], logo: '', bg: '',
+  h: [[18, 22], null, [18, 22], [18, 22], [18, 22], [18, 22], [18, 22]], logo: '', bg: '', domiciliosActivos: true,
 };
 
+export const PUNTOS_INICIAL = { activo: false, porMil: 1, puntosCanje: 100, descuentoCanje: 1000 };
+
 /**
- * @typedef {{ codigo:string, nombre:string, numero:string, activo:boolean }} MetodoPago
+ * @typedef {{ codigo:string, nombre:string, numero:string, activo:boolean, qrUrl?:string|null }} MetodoPago
+ * @typedef {{ id:number, nombre:string, etiqueta:string, montoMinimo:number|null }} PromocionPublica
+ * @typedef {{ activo:boolean, porMil:number, puntosCanje:number, descuentoCanje:number }} PuntosPublicos
  * @typedef {{ config: typeof CONFIG_INICIAL, pagos: MetodoPago[], abierto: boolean|null, suscripcionActiva: boolean,
+ *   promociones: PromocionPublica[], puntos: PuntosPublicos,
  *   cargado: boolean, recargar: () => Promise<void> }} PublicConfig
  */
 
 /** @type {PublicConfig} */
-const VACIO = { config: CONFIG_INICIAL, pagos: [], abierto: null, suscripcionActiva: true, cargado: false, recargar: async () => {} };
+const VACIO = {
+  config: CONFIG_INICIAL, pagos: [], abierto: null, suscripcionActiva: true,
+  promociones: [], puntos: PUNTOS_INICIAL, cargado: false, recargar: async () => {},
+};
 
 export const ConfigContext = createContext(VACIO);
 
@@ -36,7 +44,8 @@ export function useCargarConfig() {
       const r = await api.get('/api/public/config');
       setEstado(e => ({
         ...e, config: { ...CONFIG_INICIAL, ...(r?.config || {}) }, pagos: r?.pagos || [],
-        abierto: typeof r?.abierto === 'boolean' ? r.abierto : null, suscripcionActiva: r?.suscripcionActiva !== false, cargado: true,
+        abierto: typeof r?.abierto === 'boolean' ? r.abierto : null, suscripcionActiva: r?.suscripcionActiva !== false,
+        promociones: r?.promociones || [], puntos: { ...PUNTOS_INICIAL, ...(r?.puntos || {}) }, cargado: true,
       }));
     } catch {
       setEstado(e => ({ ...e, cargado: true }));

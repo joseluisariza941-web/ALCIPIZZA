@@ -22,10 +22,15 @@ export default function MenuPlatos({ platos, onElegir }) {
             <div className="card" key={p.id}>
               {p.imagenUrl ? <img className="pim" src={p.imagenUrl} alt={p.nombre} /> : <div className="em">{p.emoji}</div>}
               <h3>{p.nombre}</h3>
-              <div className="pills">{p.variantes.map(v => <span key={v.id} className="pl">{v.nombre}</span>)}</div>
+              {p.promocion && <span className="bd on">{p.promocion.nombre}</span>}
+              <div className="pills">{p.variantes.map(v => (
+                <span key={v.id} className="pl">{v.nombre}
+                  {v.precioPromo != null && <> · <s>{pesos(v.precio)}</s> <b>{pesos(v.precioPromo)}</b></>}
+                </span>
+              ))}</div>
               {!b && <><p className="lv">Lleva</p><div className="pills">{p.ingredientes.map(k => <span key={k} className="pl ig2">{k}</span>)}</div></>}
               {!b && p.salsas?.length > 0 && <><p className="lv">Salsas</p><div className="pills">{p.salsas.map(k => <span key={k} className="pl">{k}</span>)}</div></>}
-              <p className="pr">desde {pesos(Math.min(...p.variantes.map(v => v.precio)))}</p>
+              <p className="pr">desde {pesos(Math.min(...p.variantes.map(v => v.precioPromo ?? v.precio)))}</p>
               <button className="btn s" onClick={() => onElegir(p)}>Elegir y personalizar</button>
             </div>
           );
