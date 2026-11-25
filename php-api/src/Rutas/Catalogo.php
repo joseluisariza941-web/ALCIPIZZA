@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Alci\Rutas;
 
 use Alci\Core\{Auth, Db, HttpError, Request, Respuesta, Router};
-use Alci\Servicios\{Bitacora, Esquema as Z, Menu, Unidades};
+use Alci\Servicios\{Archivo, Bitacora, Esquema as Z, Menu, Unidades};
 
 /** Administración del catálogo: platos y extras (rol cocina). Igual que routes/catalogo.js (montado en /api/admin). */
 final class Catalogo
@@ -73,7 +73,7 @@ final class Catalogo
         $ingIds = array_map(fn($i) => $i['insumoId'], $b['ingredientes']);
         $ins = array_values(array_unique([...$ingIds, ...$b['salsas']]));
         if ($ins) {
-            $filas = Db::todos('SELECT id, tipo FROM insumos WHERE id IN (' . Db::marcas($ins) . ')', $ins);
+            $filas = Db::todos('SELECT id, tipo FROM insumos WHERE eliminado_en IS NULL AND id IN (' . Db::marcas($ins) . ')', $ins);
             if (count($filas) !== count($ins)) throw new HttpError(400, 'Hay un insumo que no existe');
             $tipos = array_column($filas, 'tipo', 'id');
             foreach ($b['salsas'] as $id) {
@@ -84,7 +84,7 @@ final class Catalogo
         $nombres = array_map(fn($v) => mb_strtolower($v['nombre']), $b['variantes']);
         if (count(array_unique($nombres)) !== count($nombres)) throw new HttpError(400, 'Hay un tamaño repetido');
         $ex = array_values(array_unique($b['extras']));
-        if ($ex && (int) Db::valor('SELECT COUNT(*) FROM extras WHERE id IN (' . Db::marcas($ex) . ')', $ex) !== count($ex)) {
+        if ($ex && (int) Db::valor('SELECT COUNT(*) FROM extras WHERE eliminado_en IS NULL AND id IN (' . Db::marcas($ex) . ')', $ex) !== count($ex)) {
             throw new HttpError(400, 'Hay un extra que no existe');
         }
     }
@@ -150,21 +150,21 @@ final class Catalogo
 
     private static function revisarInsumo(?int $insumoId): void
     {
-        if ($insumoId && Db::valor('SELECT id FROM insumos WHERE id = ?', [$insumoId]) === null) {
+        if ($insumoId && Db::valor('SELECT id FROM insumos WHERE id = ? AND eliminado_en IS NULL', [$insumoId]) === null) {
             throw new HttpError(400, 'El insumo no existe');
         }
     }
 
-    private static function extra(int $id): ?array
+    private static function extra(int $id, bool $incluirEliminados = false): ?array
     {
-        return Db::uno('SELECT * FROM extras WHERE id = ?', [$id]);
+        return Db::uno('SELECT * FROM extras WHERE id = ?' . ($incluirEliminados ? '' : ' AND eliminado_en IS NULL'), [$id]);
     }
 
     public static function registrar(Router $r): void
     {
         $r->get('/api/admin/platos', function (Request $req) {
             Auth::rol($req, 'cocina');
-            return array_map([Menu::class, 'admin'], Menu::cargarPlatos());
+            return array_map([Menu::class, 'admin'], Menu::cargarPlatos(false, null, Archivo::eliminados($req) === 'eliminados'));
         });
 
         $r->post('/api/admin/platos', function (Request $req) {
@@ -182,7 +182,7 @@ final class Catalogo
         $r->put('/api/admin/platos/:id', function (Request $req, array $p) {
             Auth::rol($req, 'cocina');
             $id = Z::idUrl($p);
-            if (Db::valor('SELECT id FROM platos WHERE id = ?', [$id]) === null) throw new HttpError(404, 'Plato no encontrado');
+            if (Db::valor('SELECT id FROM platos WHERE id = ? AND eliminado_en IS NULL', [$id]) === null) throw new HttpError(404, 'Plato no encontrado');
             $b = Z::validar(self::platoSchema(), $req->body);
             Db::tx(function () use ($req, $b, $id) {
                 self::revisarReferencias($b);
@@ -195,26 +195,44 @@ final class Catalogo
         $r->delete('/api/admin/platos/:id', function (Request $req, array $p) {
             Auth::rol($req, 'cocina');
             $id = Z::idUrl($p);
-            $pl = Db::uno('SELECT * FROM platos WHERE id = ?', [$id]);
+            $pl = Db::uno('SELECT * FROM platos WHERE id = ? AND eliminado_en IS NULL', [$id]);
             if (!$pl) throw new HttpError(404, 'Plato no encontrado');
-            $usado = Db::valor('SELECT id FROM pedido_items WHERE plato_id = ? LIMIT 1', [$id]) !== null;
-            if ($usado) Db::ejecutar('UPDATE platos SET activo = 0 WHERE id = ?', [$id]);
-            else Db::ejecutar('DELETE FROM platos WHERE id = ?', [$id]);
-            Bitacora::registrar($req, ($usado ? 'Desactivó' : 'Eliminó') . " el plato {$pl['nombre']}");
-            return ['ok' => true, 'desactivado' => $usado];
+            Db::ejecutar('UPDATE platos SET eliminado_en = NOW() WHERE id = ?', [$id]);
+            Bitacora::registrar($req, "Eliminó el plato {$pl['nombre']}");
+            return ['ok' => true];
+        });
+
+        $r->post('/api/admin/platos/:id/restaurar', function (Request $req, array $p) {
+            Auth::rol($req, 'cocina');
+            $id = Z::idUrl($p);
+            $pl = Db::uno('SELECT * FROM platos WHERE id = ? AND eliminado_en IS NOT NULL', [$id]);
+            if (!$pl) throw new HttpError(404, 'Plato no encontrado');
+            Db::ejecutar('UPDATE platos SET eliminado_en = NULL WHERE id = ?', [$id]);
+            Bitacora::registrar($req, "Restauró el plato {$pl['nombre']}");
+            return self::platoAdmin($id);
         });
 
         $r->get('/api/admin/extras', function (Request $req) {
             Auth::rol($req, 'cocina');
-            return array_map([Menu::class, 'extraCompleto'], Db::todos('SELECT * FROM extras ORDER BY id'));
+            $where = Archivo::eliminados($req) === 'eliminados' ? 'eliminado_en IS NOT NULL' : 'eliminado_en IS NULL';
+            return array_map([Menu::class, 'extraCompleto'], Db::todos("SELECT * FROM extras WHERE $where ORDER BY id"));
         });
 
         $r->post('/api/admin/extras', function (Request $req) {
             Auth::rol($req, 'cocina');
             $b = Z::validar(self::extraSchema(), $req->body);
             self::revisarInsumo($b['insumoId']);
-            $id = Db::insertar('extras', self::filaExtra($b));
-            Bitacora::registrar($req, "Creó el extra {$b['nombre']}");
+            $anterior = Db::uno('SELECT id, eliminado_en FROM extras WHERE nombre = ? LIMIT 1', [$b['nombre']]);
+            if ($anterior) {
+                if (empty($anterior['eliminado_en'])) throw new HttpError(409, 'Ya existe un extra con ese nombre');
+                $id = (int) $anterior['id'];
+                Db::actualizar('extras', [...self::filaExtra($b), 'eliminado_en' => null], 'id = ?', [$id]);
+                $accion = 'Restauró';
+            } else {
+                $id = Db::insertar('extras', self::filaExtra($b));
+                $accion = 'Creó';
+            }
+            Bitacora::registrar($req, "$accion el extra {$b['nombre']}");
             return Respuesta::con(201, Menu::extraCompleto(self::extra($id)));
         });
 
@@ -235,9 +253,19 @@ final class Catalogo
             $id = Z::idUrl($p);
             $actual = self::extra($id);
             if (!$actual) throw new HttpError(404, 'Extra no encontrado');
-            Db::ejecutar('DELETE FROM extras WHERE id = ?', [$id]);
+            Db::ejecutar('UPDATE extras SET eliminado_en = NOW() WHERE id = ?', [$id]);
             Bitacora::registrar($req, "Eliminó el extra {$actual['nombre']}");
             return ['ok' => true];
+        });
+
+        $r->post('/api/admin/extras/:id/restaurar', function (Request $req, array $p) {
+            Auth::rol($req, 'cocina');
+            $id = Z::idUrl($p);
+            $actual = self::extra($id, true);
+            if (!$actual || empty($actual['eliminado_en'])) throw new HttpError(404, 'Extra no encontrado');
+            Db::ejecutar('UPDATE extras SET eliminado_en = NULL WHERE id = ?', [$id]);
+            Bitacora::registrar($req, "Restauró el extra {$actual['nombre']}");
+            return Menu::extraCompleto(self::extra($id));
         });
 
         // r.use(requireRole('cocina')) en /api/admin: cualquier otra ruta bajo /api/admin pide rol cocina antes del 404.

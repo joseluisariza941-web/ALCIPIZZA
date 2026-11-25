@@ -6,9 +6,10 @@ import { pillIngrediente } from './platos.js';
 import { toastError } from './toast.js';
 import PlatoModal from './PlatoModal.jsx';
 import Extras from './Extras.jsx';
+import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 
 /** Lista de platos y bebidas (kc0 original). */
-function Platos({ platos, onEditar, onBorrar }) {
+function Platos({ platos, onEditar, onBorrar, onRestaurado }) {
   return (
     <>
       <h2>Comidas</h2>
@@ -39,6 +40,7 @@ function Platos({ platos, onEditar, onBorrar }) {
         </table>
       </div>
       <button className="btn" onClick={() => onEditar(null)}>+ Nuevo plato</button>
+      <FiltroEliminados ruta="/api/admin/platos" nombre={p => p.nombre} version={platos} onRestaurado={onRestaurado} />
     </>
   );
 }
@@ -53,7 +55,7 @@ export default function Comidas() {
   const recargar = () => { pl.recargar(); ex.recargar(); };
 
   async function borrar(p) {
-    if (!confirm('¿Eliminar este plato?')) return;
+    if (!confirm(textoOcultar('este plato'))) return;
     try { await api.del(`/api/admin/platos/${p.id}`); } catch (e) { toastError(e); }
     pl.recargar();
   }
@@ -66,7 +68,7 @@ export default function Comidas() {
       </div>
       {ct === 'x'
         ? <Extras extras={ex.data} platos={pl.data} insumos={ins.data} recargar={recargar} />
-        : <Platos platos={pl.data} onEditar={setEditando} onBorrar={borrar} />}
+        : <Platos platos={pl.data} onEditar={setEditando} onBorrar={borrar} onRestaurado={recargar} />}
       {editando !== undefined && (
         <PlatoModal plato={editando} platos={pl.data} extras={ex.data} insumos={ins.data}
           onCerrar={() => setEditando(undefined)} onGuardado={() => { setEditando(undefined); pl.recargar(); }} />

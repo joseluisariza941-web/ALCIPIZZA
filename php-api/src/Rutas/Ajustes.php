@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Alci\Rutas;
 
 use Alci\Core\{Auth, Db, Fmt, HttpError, Request, Respuesta, Router};
-use Alci\Servicios\{Bitacora, Config, Esquema as Z, Rango};
+use Alci\Servicios\{Archivo, Bitacora, Config, Esquema as Z, Rango};
 
 /** Configuración general, métodos de pago y reportes (rol cocina). Igual que routes/ajustes.js (montado en /api). */
 final class Ajustes
@@ -64,9 +64,9 @@ final class Ajustes
         ]);
     }
 
-    private static function metodo(string $codigo): ?array
+    private static function metodo(string $codigo, bool $incluirEliminados = false): ?array
     {
-        return Db::uno('SELECT * FROM metodos_pago WHERE codigo = ?', [$codigo]);
+        return Db::uno('SELECT * FROM metodos_pago WHERE codigo = ?' . ($incluirEliminados ? '' : ' AND eliminado_en IS NULL'), [$codigo]);
     }
 
     /** b.nombre.normalize('NFD').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 8) || 'mp' */
@@ -104,24 +104,31 @@ final class Ajustes
 
         $r->get('/api/metodos-pago', function (Request $req) {
             Auth::rol($req, 'cocina');
-            return Config::metodosPago();
+            return Config::metodosPago(false, Archivo::eliminados($req) === 'eliminados');
         });
 
         $r->post('/api/metodos-pago', function (Request $req) {
             Auth::rol($req, 'cocina');
             $b = Z::validar(self::metodoNuevoSchema(), $req->body);
-            if (Db::valor('SELECT codigo FROM metodos_pago WHERE LOWER(nombre) = ? LIMIT 1', [mb_strtolower($b['nombre'])]) !== null) {
-                throw new HttpError(409, 'Ya existe un método de pago con ese nombre');
+            $anterior = Db::uno('SELECT * FROM metodos_pago WHERE LOWER(nombre) = ? LIMIT 1', [mb_strtolower($b['nombre'])]);
+            if ($anterior && empty($anterior['eliminado_en'])) throw new HttpError(409, 'Ya existe un método de pago con ese nombre');
+            $fila = [
+                'nombre' => $b['nombre'], 'numero' => ($b['numero'] ?? '') === '' ? null : $b['numero'],
+                'qr_url' => self::revisarQr($b['qrUrl'] ?? null), 'activo' => (int) $b['activo'],
+            ];
+            if ($anterior) {
+                $codigo = $anterior['codigo'];
+                Db::actualizar('metodos_pago', [...$fila, 'eliminado_en' => null], 'codigo = ?', [$codigo]);
+                $accion = 'Restauró';
+            } else {
+                $base = self::codigoBase($b['nombre']);
+                $codigo = $base;
+                for ($i = 2; Db::valor('SELECT codigo FROM metodos_pago WHERE codigo = ?', [$codigo]) !== null; $i++) $codigo = substr($base, 0, 8) . $i;
+                $orden = Db::valor('SELECT MAX(orden) FROM metodos_pago');
+                Db::insertar('metodos_pago', [...$fila, 'codigo' => $codigo, 'orden' => ($orden === null ? -1 : (int) $orden) + 1]);
+                $accion = 'Creó';
             }
-            $base = self::codigoBase($b['nombre']);
-            $codigo = $base;
-            for ($i = 2; self::metodo($codigo); $i++) $codigo = substr($base, 0, 8) . $i;
-            $orden = Db::valor('SELECT MAX(orden) FROM metodos_pago');
-            Db::insertar('metodos_pago', [
-                'codigo' => $codigo, 'nombre' => $b['nombre'], 'numero' => ($b['numero'] ?? '') === '' ? null : $b['numero'],
-                'qr_url' => self::revisarQr($b['qrUrl'] ?? null), 'activo' => (int) $b['activo'], 'orden' => ($orden === null ? -1 : (int) $orden) + 1,
-            ]);
-            Bitacora::registrar($req, "Creó el método de pago {$b['nombre']}");
+            Bitacora::registrar($req, "$accion el método de pago {$b['nombre']}");
             return Respuesta::con(201, Config::aMetodo(self::metodo($codigo)));
         });
 
@@ -130,12 +137,19 @@ final class Ajustes
             $codigo = mb_substr((string) $p['codigo'], 0, 10);
             $m = self::metodo($codigo);
             if (!$m) throw new HttpError(404, 'Método de pago no encontrado');
-            // si algún pedido lo usa, se desactiva para no perder el historial
-            $usado = Db::valor('SELECT id FROM pedidos WHERE metodo_pago = ? LIMIT 1', [$codigo]) !== null;
-            if ($usado) Db::ejecutar('UPDATE metodos_pago SET activo = 0 WHERE codigo = ?', [$codigo]);
-            else Db::ejecutar('DELETE FROM metodos_pago WHERE codigo = ?', [$codigo]);
-            Bitacora::registrar($req, ($usado ? 'Desactivó' : 'Eliminó') . " el método de pago {$m['nombre']}");
-            return ['ok' => true, 'desactivado' => $usado];
+            Db::ejecutar('UPDATE metodos_pago SET eliminado_en = NOW() WHERE codigo = ?', [$codigo]);
+            Bitacora::registrar($req, "Eliminó el método de pago {$m['nombre']}");
+            return ['ok' => true];
+        });
+
+        $r->post('/api/metodos-pago/:codigo/restaurar', function (Request $req, array $p) {
+            Auth::rol($req, 'cocina');
+            $codigo = mb_substr((string) $p['codigo'], 0, 10);
+            $m = self::metodo($codigo, true);
+            if (!$m || empty($m['eliminado_en'])) throw new HttpError(404, 'Método de pago no encontrado');
+            Db::ejecutar('UPDATE metodos_pago SET eliminado_en = NULL WHERE codigo = ?', [$codigo]);
+            Bitacora::registrar($req, "Restauró el método de pago {$m['nombre']}");
+            return Config::aMetodo(self::metodo($codigo));
         });
 
         $r->put('/api/metodos-pago/:codigo', function (Request $req, array $p) {
@@ -157,9 +171,12 @@ final class Ajustes
         $r->get('/api/reportes/ventas', function (Request $req) {
             Auth::rol($req, 'cocina');
             $f = Rango::rango(Rango::validar($req->query), true);
+            $arch = Archivo::archivados($req);
+            $condP = $arch === 'solo' ? ' AND p.archivado_en IS NOT NULL' : ($arch === 'activos' ? ' AND p.archivado_en IS NULL' : '');
+            $condC = $arch === 'solo' ? ' AND c.archivado_en IS NOT NULL' : ($arch === 'activos' ? ' AND c.archivado_en IS NULL' : '');
             $d = Fmt::sql($f['desde']);
             $h = Fmt::sql($f['hasta']);
-            $ventas = "FROM pedidos p %s WHERE p.creado_en >= ? AND p.creado_en < ? AND p.estado <> 'cancelado'";
+            $ventas = "FROM pedidos p %s WHERE p.creado_en >= ? AND p.creado_en < ? AND p.estado <> 'cancelado'$condP";
             $tot = Db::uno('SELECT COALESCE(SUM(p.total),0) AS total, COUNT(*) AS pedidos,
                 COALESCE(SUM(CASE WHEN p.pago_estado = \'pagado\' THEN p.total ELSE 0 END),0) AS cobrado,
                 COALESCE(SUM(CASE WHEN p.origen = \'web\' THEN 1 ELSE 0 END),0) AS web ' . sprintf($ventas, ''), [$d, $h]);
@@ -171,7 +188,7 @@ final class Ajustes
                 . ' GROUP BY m.nombre ORDER BY `total` DESC', [$d, $h]);
             $porDia = Db::todos("SELECT DATE_FORMAT(DATE(p.creado_en), '%Y-%m-%d') AS fecha, SUM(p.total) AS total "
                 . sprintf($ventas, '') . " GROUP BY DATE_FORMAT(DATE(p.creado_en), '%Y-%m-%d') ORDER BY `fecha` ASC", [$d, $h]);
-            $compras = Db::valor('SELECT COALESCE(SUM(costo),0) AS total FROM compras WHERE fecha >= ? AND fecha < ?', [$d, $h]);
+            $compras = Db::valor('SELECT COALESCE(SUM(costo),0) AS total FROM compras c WHERE c.fecha >= ? AND c.fecha < ? AND c.eliminado_en IS NULL' . $condC, [$d, $h]);
             return [
                 'total' => self::n($tot['total']), 'pedidos' => self::n($tot['pedidos']),
                 'cobrado' => self::n($tot['cobrado']), 'porCobrar' => Fmt::num(self::n($tot['total']) - self::n($tot['cobrado'])),

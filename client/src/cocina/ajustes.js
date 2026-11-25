@@ -26,3 +26,22 @@ export const mesasValidas = v => Math.max(1, +v || 1);
  * @param {Partial<{nombre:string, numero:string, activo:boolean}>} cambio
  */
 export const metodoBody = (m, cambio) => ({ nombre: m.nombre, numero: m.numero || '', activo: !!m.activo, ...cambio });
+
+export const MAX_QR = 700000;
+/** ¿La imagen del QR cabe en el límite de la API? @param {string} s */
+export const qrCabe = s => s.length <= MAX_QR;
+
+const ent = (v, min, max = Infinity) => Math.min(max, Math.max(min, Math.round(Number(v) || 0)));
+
+/**
+ * Cuerpo del PUT /api/config: sin logo ni fondo, mesas mínimo 1 y ajustes de puntos como enteros.
+ * @param {any} f
+ */
+export function configBody(f) {
+  const { logo, bg, ...r } = f;
+  const b = { ...r, mesas: mesasValidas(f.mesas) };
+  if ('puntosPorMil' in b) b.puntosPorMil = ent(b.puntosPorMil, 0, 1000);
+  if ('puntosCanje' in b) b.puntosCanje = ent(b.puntosCanje, 1);
+  if ('descuentoCanje' in b) b.descuentoCanje = ent(b.descuentoCanje, 0);
+  return b;
+}

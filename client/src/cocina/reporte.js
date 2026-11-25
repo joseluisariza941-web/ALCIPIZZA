@@ -61,3 +61,29 @@ export function filtrarVentas(pedidos, q) {
   return activos(pedidos).filter(o => `#${o.id} ${o.destino} ${o.cliente || ''} ${o.metodoPago?.nombre || ''} ${o.origen} ${o.mesera?.nombre || ''} ${fd(o.creadoEn)} ${o.items.map(c => c.nombre).join(' ')}`
     .toLowerCase().includes(b));
 }
+
+/** Opciones del filtro de archivados: valor de `archivados` ('' = periodo actual) y etiqueta. */
+export const ARCHIVADOS = [['', 'Periodo actual'], ['incluir', 'Todo el histórico'], ['solo', 'Solo archivado']];
+
+/**
+ * Query string de los reportes.
+ * @param {{desde?:string, hasta?:string}} r
+ * @param {string} [arch] '', 'incluir' o 'solo'
+ */
+export function qsReporte(r, arch = '') {
+  const p = new URLSearchParams();
+  if (r.desde) p.set('desde', r.desde);
+  if (r.hasta) p.set('hasta', r.hasta);
+  if (arch) p.set('archivados', arch);
+  return p.toString();
+}
+
+/** Query string de /api/facturas. @param {{q?:string, desde?:string, hasta?:string, pagina?:number, porPagina?:number}} f @param {string} [arch] */
+export function qsFacturas({ q = '', desde = '', hasta = '', pagina = 1, porPagina = 20 }, arch = '') {
+  const p = new URLSearchParams({ pagina: String(pagina), porPagina: String(porPagina) });
+  if (q.trim()) p.set('q', q.trim());
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  if (arch) p.set('archivados', arch);
+  return p.toString();
+}

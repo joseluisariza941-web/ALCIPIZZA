@@ -10,7 +10,7 @@ use Alci\Core\Request;
 use Alci\Core\Respuesta;
 use Alci\Core\Router;
 use Alci\Core\Sesion;
-use Alci\Servicios\Bitacora;
+use Alci\Servicios\{Archivo, Bitacora};
 use Alci\Servicios\Suscripcion;
 use Alci\Servicios\Usuarios as Servicio;
 use Alci\Servicios\Zod;
@@ -59,9 +59,10 @@ final class Usuarios
     {
         $r->get('/api/usuarios', function (Request $req) {
             $yo = Auth::rol($req, 'cocina', 'dev');
+            $cond = Archivo::eliminados($req) === 'eliminados' ? 'eliminado_en IS NOT NULL' : 'eliminado_en IS NULL';
             $filas = $yo['rol'] === 'cocina'
-                ? Db::todos("SELECT * FROM usuarios WHERE rol = 'mesera' ORDER BY id")
-                : Db::todos('SELECT * FROM usuarios ORDER BY id');
+                ? Db::todos("SELECT * FROM usuarios WHERE rol = 'mesera' AND $cond ORDER BY id")
+                : Db::todos("SELECT * FROM usuarios WHERE $cond ORDER BY id");
             return array_map([Servicio::class, 'publico'], $filas);
         });
 
@@ -122,9 +123,22 @@ final class Usuarios
             $t = self::objetivo($req, $params);
             if ((int) $t['id'] === (int) $yo['id']) throw new HttpError(400, 'No puedes borrarte a ti mismo');
             Sesion::cerrarDe((int) $t['id']);
-            Db::ejecutar('DELETE FROM usuarios WHERE id = ?', [(int) $t['id']]);
-            Bitacora::registrar($req, "Quitó al usuario {$t['nombre']} ({$t['usuario']})");
+            Db::ejecutar('UPDATE usuarios SET eliminado_en = NOW() WHERE id = ?', [(int) $t['id']]);
+            Bitacora::registrar($req, "Eliminó al usuario {$t['nombre']} ({$t['usuario']})");
             return ['ok' => true];
+        });
+
+        $r->post('/api/usuarios/:id/restaurar', function (Request $req, array $params) {
+            $yo = Auth::rol($req, 'cocina', 'dev');
+            $z = new Zod($params);
+            $id = $z->enteroCoaccion('id', ['positivo' => true]);
+            $z->fin();
+            $t = Servicio::porId($id, true);
+            if (!$t || empty($t['eliminado_en'])) throw new HttpError(404, 'Usuario no encontrado');
+            if (!self::puedeTocar($yo, $t)) throw new HttpError(403, 'No tienes permiso sobre este usuario', 'PROHIBIDO');
+            Db::ejecutar('UPDATE usuarios SET eliminado_en = NULL WHERE id = ?', [$id]);
+            Bitacora::registrar($req, "Restauró al usuario {$t['nombre']} ({$t['usuario']})");
+            return Servicio::publico(Servicio::porId($id));
         });
 
         $r->get('/api/suscripcion', function (Request $req) {

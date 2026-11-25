@@ -1,7 +1,7 @@
 // Lógica pura de Inventario y compras.
 import { fd } from './util.js';
+import { unidadesCompatibles } from './unidades.js';
 
-const esUnd = u => u === 'und';
 const buscar = (lista, nombre) => lista.find(x => x.nombre.trim().toLowerCase() === nombre.trim().toLowerCase());
 
 /**
@@ -16,7 +16,7 @@ export function validarCompra(f, insumos) {
   if (!(cantidad > 0)) return { error: 'Escribe la cantidad' };
   const surtidorId = !f.surtidor || f.surtidor === 'tienda' ? null : +f.surtidor;
   const x = buscar(insumos, nombre);
-  if (x && esUnd(f.unidad) !== esUnd(x.unidad)) return { error: 'Unidad incompatible: este producto se mide en ' + x.unidad };
+  if (x && !unidadesCompatibles(f.unidad, x.unidad)) return { error: 'Unidad incompatible: este producto se mide en ' + x.unidad };
   const base = { cantidad, unidad: f.unidad, costo, surtidorId };
   return x
     ? { body: { insumoId: x.id, ...base }, nuevo: false }

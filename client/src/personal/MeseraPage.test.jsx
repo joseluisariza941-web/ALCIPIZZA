@@ -164,6 +164,58 @@ describe('MeseraPage · nuevo pedido', () => {
   });
 });
 
+describe('MeseraPage · puntos', () => {
+  const CON_PUNTOS = { ...CONFIG, puntos: { activo: true, porMil: 1, puntosCanje: 100, descuentoCanje: 1000 } };
+
+  it('envía el celular del cliente al crear el pedido', async () => {
+    const { u, f } = montar({ 'POST /api/pedidos': { status: 201, body: { pedido: pedido(9) } } });
+    await u.click((await screen.findAllByRole('button', { name: 'Elegir y personalizar' }))[0]);
+    await u.click(modal().getByRole('button', { name: 'Agregar' }));
+    await u.selectOptions(ticket().getByLabelText('Destino'), 'Mesa 1');
+    await u.type(ticket().getByLabelText('Celular del cliente (opcional)'), '300 123 4567');
+    await u.click(ticket().getByRole('button', { name: 'Enviar pedido' }));
+    await u.click(modal().getByRole('button', { name: '✅ Confirmar y enviar' }));
+    await screen.findByText('PEDIDO #9');
+    expect(JSON.parse(llamada(f, 'POST', '/api/pedidos')[1].body).celular).toBe('3001234567');
+  });
+
+  it('rechaza un celular inválido', async () => {
+    const { u } = montar();
+    await u.click((await screen.findAllByRole('button', { name: 'Elegir y personalizar' }))[0]);
+    await u.click(modal().getByRole('button', { name: 'Agregar' }));
+    await u.selectOptions(ticket().getByLabelText('Destino'), 'Mesa 1');
+    await u.type(ticket().getByLabelText('Celular del cliente (opcional)'), '123');
+    await u.click(ticket().getByRole('button', { name: 'Enviar pedido' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Escribe un celular válido');
+  });
+
+  it('cobra canjeando puntos y muestra el total final del servidor', async () => {
+    const { u, f } = montar({
+      'GET /api/public/config': CON_PUNTOS,
+      'GET /api/public/puntos/3001234567': { celular: '3001234567', activo: true, saldo: 500, puntosCanje: 100, descuentoCanje: 1000 },
+      'POST /api/pedidos/6/pago': pedido(6, { pagoEstado: 'pagado', total: 27000, descuentoPuntos: 1000 }),
+    }, [pedido(6, { estado: 'entregado', celular: '3001234567' })]);
+    await u.click(await screen.findByRole('button', { name: 'Historial' }));
+    await u.click(screen.getByRole('button', { name: 'Confirmar pago' }));
+    await u.click(modal().getByRole('button', { name: 'Ver puntos' }));
+    await modal().findByText('Saldo: 500 puntos');
+    await u.selectOptions(modal().getByLabelText('Canjes a aplicar'), '1');
+    await u.click(modal().getByRole('button', { name: 'Nequi' }));
+    expect(await modal().findByText('Total cobrado: $27.000')).toBeInTheDocument();
+    expect(JSON.parse(llamada(f, 'POST', '/api/pedidos/6/pago')[1].body)).toEqual({ metodoPago: 'nq', celular: '3001234567', canjearPuntos: 100 });
+  });
+
+  it('muestra las etiquetas del cliente y los descuentos en la tarjeta', async () => {
+    const { u } = montar({}, [pedido(6, { estado: 'nuevo', origen: 'web', mesera: null, editadoEn: '2026-11-23T20:05:00Z', promocion: { id: 1, nombre: '2x1' }, descuentoPromo: 3000, descuentoPuntos: 1000 }),
+      pedido(7, { origen: 'web', mesera: null, estado: 'cancelado', canceladoPorCliente: true })]);
+    await u.click(await screen.findByRole('button', { name: 'Historial' }));
+    expect(screen.getByText('Editado por el cliente')).toBeInTheDocument();
+    expect(screen.getByText('Cancelado por el cliente')).toBeInTheDocument();
+    expect(screen.getByText('Promoción 2x1: -$3.000')).toBeInTheDocument();
+    expect(screen.getByText('Puntos: -$1.000')).toBeInTheDocument();
+  });
+});
+
 describe('MeseraPage · historial', () => {
   const lista = [
     pedido(8, { estado: 'listo' }),

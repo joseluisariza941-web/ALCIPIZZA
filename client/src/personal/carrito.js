@@ -1,4 +1,5 @@
 // Lógica pura del pedido de la mesera: carrito, validación y cuerpo para la API.
+import { celularValido, normalizarCelular } from '../cliente/carrito.js';
 
 /**
  * @typedef {{ id:number, nombre:string, precio:number }} Variante
@@ -7,7 +8,7 @@
  *   ingredientes:string[], salsas:string[], extras:Extra[] }} Plato
  * @typedef {{ platoId:number, varianteId:number|null, nombre:string, emoji:string, variante:string, precio:number,
  *   extras:{id:number,nombre:string,precio:number}[], sin:string[], salsas:string[], nota:string }} ItemCarrito
- * @typedef {{ destino:string, cliente?:string, direccion?:string, telefono?:string }} Datos
+ * @typedef {{ destino:string, cliente?:string, direccion?:string, telefono?:string, celular?:string }} Datos
  */
 
 /** Las bebidas no muestran ingredientes ni salsas. @param {Plato} p */
@@ -50,6 +51,7 @@ export function validarPedido(cart, d) {
     if (!(d.cliente || '').trim()) return 'Escribe el nombre';
     if (!(d.direccion || '').trim()) return 'Escribe la dirección';
   }
+  if ((d.celular || '').trim() && !celularValido(d.celular)) return 'Escribe un celular válido (10 dígitos que empiezan por 3)';
   return null;
 }
 
@@ -68,6 +70,7 @@ export function cuerpoPedido(cart, d) {
       if (v) body[k] = v;
     }
   }
+  if ((d.celular || '').trim()) body.celular = normalizarCelular(d.celular);
   body.items = cart.map(c => ({ platoId: c.platoId, varianteId: c.varianteId, extras: c.extras.map(e => e.id), salsas: c.salsas, sin: c.sin, nota: c.nota }));
   return body;
 }

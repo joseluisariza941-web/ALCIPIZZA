@@ -56,7 +56,7 @@ describe('Pestaña Inventario', () => {
     renderWith(<Inventario />);
     const fila = (await screen.findByText('Queso', { selector: 'b' })).closest('tr');
     await userEvent.click(within(fila).getByRole('button', { name: 'Eliminar' }));
-    expect(confirm).toHaveBeenCalledWith('¿Eliminar "Queso" del inventario?');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('se puede restaurar'));
     expect(llamada(f, 'DELETE', '/api/insumos/1')).toBeTruthy();
     expect(await screen.findByText('Un plato usa este insumo')).toHaveClass('toast');
   });

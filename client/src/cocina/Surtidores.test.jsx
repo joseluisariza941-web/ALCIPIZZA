@@ -59,7 +59,7 @@ describe('Pestaña Surtidores', () => {
     renderWith(<Surtidores />);
     await screen.findByDisplayValue('Pedro');
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
-    expect(confirm).toHaveBeenCalledWith('¿Eliminar este surtidor?');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('se puede restaurar'));
     expect(llamada(f, 'DELETE', '/api/surtidores/1')).toBeTruthy();
   });
 

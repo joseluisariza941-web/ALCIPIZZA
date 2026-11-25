@@ -16,7 +16,7 @@ export const testApp = (opts = {}) => {
 export async function prepararUsuario(usuario, clave, extra = {}) {
   await db('usuarios').where({ usuario }).update({
     clave_hash: await bcrypt.hash(clave, 4), debe_cambiar_clave: false, intentos_fallidos: 0,
-    bloqueado_hasta: null, activo: true, ...extra,
+    bloqueado_hasta: null, activo: true, eliminado_en: null, ...extra,
   });
   return db('usuarios').where({ usuario }).first();
 }
@@ -68,15 +68,15 @@ export async function instantanea() {
   const usuarios = await db('usuarios').whereIn('usuario', ['dev', 'admin', 'ana']);
   const sub = await db('suscripcion').where({ id: 1 }).first();
   const cfg = await db('config').where({ clave: 'general' }).first();
-  const insumos = await db('insumos').select('id', 'stock', 'stock_referencia', 'costo', 'surtidor_id');
+  const insumos = await db('insumos').select('id', 'stock', 'stock_referencia', 'costo', 'surtidor_id', 'eliminado_en');
   const metodos = await db('metodos_pago');
   const max = {};
-  for (const t of ['pedidos', 'compras', 'platos', 'extras', 'insumos', 'surtidores', 'categorias', 'usuarios']) {
+  for (const t of ['pedidos', 'compras', 'platos', 'extras', 'insumos', 'surtidores', 'categorias', 'usuarios', 'promociones']) {
     max[t] = (await db(t).max({ m: 'id' }).first()).m ?? 0;
   }
   return async () => {
     // borra lo que creó el archivo de pruebas y devuelve el inventario a como estaba
-    for (const t of ['pedidos', 'compras', 'platos', 'extras', 'insumos', 'surtidores', 'categorias', 'usuarios']) {
+    for (const t of ['pedidos', 'compras', 'platos', 'extras', 'insumos', 'surtidores', 'categorias', 'usuarios', 'promociones']) {
       await db(t).where('id', '>', max[t]).del();
     }
     for (const i of insumos) {
@@ -85,11 +85,17 @@ export async function instantanea() {
     }
     await db('metodos_pago').whereNotIn('codigo', metodos.map(m => m.codigo)).del();
     for (const m of metodos) await db('metodos_pago').where({ codigo: m.codigo }).update(m);
-    await db('platos').update({ activo: true });
+    await db('platos').update({ activo: true, eliminado_en: null });
+    await db('extras').update({ eliminado_en: null });
+    await db('surtidores').update({ eliminado_en: null });
+    await db('promociones').update({ eliminado_en: null });
+    await db('pedidos').update({ archivado_en: null });
+    await db('compras').update({ archivado_en: null, eliminado_en: null });
+    await db('bitacora').update({ archivado_en: null });
     for (const u of usuarios) {
-      const { id, clave_hash, debe_cambiar_clave, activo, nombre, rol } = u;
+      const { id, clave_hash, debe_cambiar_clave, activo, nombre, rol, eliminado_en } = u;
       await db('usuarios').where({ id }).update({
-        clave_hash, debe_cambiar_clave, activo, nombre, rol, usuario: u.usuario, intentos_fallidos: 0, bloqueado_hasta: null,
+        clave_hash, debe_cambiar_clave, activo, nombre, rol, usuario: u.usuario, eliminado_en, intentos_fallidos: 0, bloqueado_hasta: null,
       });
     }
     await db('suscripcion').where({ id: 1 }).update({ activa: sub.activa, hasta: sub.hasta });

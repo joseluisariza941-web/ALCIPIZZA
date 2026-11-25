@@ -4,6 +4,7 @@ import { useCarga } from './hooks.js';
 import { fd, money } from './util.js';
 import { filasSurtidores, validarSurtidor } from './surtidores.js';
 import { toast, toastError } from './toast.js';
+import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 
 const VACIO = { nombre: '', empresa: '', correo: '', telefono: '' };
 const CAMPOS = [['nombre', 'Nombre', 'text', ''], ['empresa', 'Empresa', 'text', 'Empresa'], ['correo', 'Correo', 'email', 'Correo'],
@@ -47,7 +48,7 @@ export default function Surtidores() {
     sur.recargar();
   }
   async function borrar(z) {
-    if (!confirm('¿Eliminar este surtidor?')) return;
+    if (!confirm(textoOcultar('este surtidor'))) return;
     try { await api.del(`/api/surtidores/${z.id}`); } catch (e) { toastError(e); }
     sur.recargar();
   }
@@ -67,6 +68,7 @@ export default function Surtidores() {
           <button className="btn" onClick={crear}>Guardar surtidor</button>
         </div>
       </div>
+      <FiltroEliminados ruta="/api/surtidores" nombre={z => z.nombre} version={sur.data} onRestaurado={sur.recargar} />
       <div className="card scr">
         <input placeholder="🔎 Buscar surtidor o producto" value={q} onChange={e => setQ(e.target.value)} style={{ marginBottom: '.6rem' }} />
         <table>

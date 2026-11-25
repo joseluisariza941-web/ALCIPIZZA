@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { api } from '../api.js';
 import { usePublicConfig } from '../components/ConfigContext.jsx';
 import { botonEstado, hora, money, siguienteEstado, waLink } from './util.js';
 import { toastError } from './toast.js';
+import CobroModal from '../personal/CobroModal.jsx';
+import EtiquetasPedido from '../personal/EtiquetasPedido.jsx';
 import WaIcon from './WaIcon.jsx';
 
 /** Estado de pago (pgb original). */
@@ -23,7 +26,7 @@ function Item({ c }) {
 }
 
 /** Tarjeta de pedido (kp original). */
-function Ticket({ o, onEstado, onWa }) {
+function Ticket({ o, onEstado, onWa, onCobrar }) {
   const sig = siguienteEstado(o.estado);
   return (
     <div className="tk">
@@ -38,6 +41,10 @@ function Ticket({ o, onEstado, onWa }) {
       <hr />
       <p className="r"><small>{hora(o.creadoEn)}</small><b>{money(o.total)}</b></p>
       <p><Pago o={o} /></p>
+      <EtiquetasPedido o={o} />
+      {o.pagoEstado !== 'pagado' && (o.estado === 'listo' || o.estado === 'entregado') && (
+        <button className="btn s" style={{ width: '100%', marginTop: '.5rem' }} onClick={() => onCobrar(o)}>Confirmar pago</button>
+      )}
       {sig && <button className="btn" style={{ width: '100%', marginTop: '.5rem' }} onClick={() => onEstado(o, sig)}>{botonEstado(o.estado)}</button>}
       <button className="btn s wa" style={{ width: '100%', marginTop: '.5rem' }} onClick={() => onWa(o)}><WaIcon /> Enviar al WhatsApp</button>
       {(o.estado === 'nuevo' || o.estado === 'preparando') && (
@@ -52,7 +59,8 @@ function Ticket({ o, onEstado, onWa }) {
  * @param {{ pedidos: any[], recargar: () => Promise<void> }} p
  */
 export default function Pedidos({ pedidos, recargar }) {
-  const { config: cfg } = usePublicConfig();
+  const { config: cfg, pagos, puntos } = usePublicConfig();
+  const [cobro, setCobro] = useState(null);
   const act = pedidos.filter(o => o.estado === 'nuevo' || o.estado === 'preparando');
   const listos = pedidos.filter(o => o.estado === 'listo');
 
@@ -68,14 +76,15 @@ export default function Pedidos({ pedidos, recargar }) {
       <h2>En cocina</h2>
       <p className="sm" style={{ margin: '.5rem 0 1.2rem' }}>{listos.length} pedido(s) listo(s) esperando entrega.</p>
       {act.length
-        ? <div className="tks">{act.map(o => <Ticket key={o.id} o={o} onEstado={onEstado} onWa={onWa} />)}</div>
+        ? <div className="tks">{act.map(o => <Ticket key={o.id} o={o} onEstado={onEstado} onWa={onWa} onCobrar={setCobro} />)}</div>
         : <div className="card">Sin pedidos por ahora. Cuando llegue uno, suena la campana.</div>}
       {listos.length > 0 && (
         <>
           <h2 style={{ marginTop: '1.5rem' }}>Listos para entregar</h2>
-          <div className="tks">{listos.map(o => <Ticket key={o.id} o={o} onEstado={onEstado} onWa={onWa} />)}</div>
+          <div className="tks">{listos.map(o => <Ticket key={o.id} o={o} onEstado={onEstado} onWa={onWa} onCobrar={setCobro} />)}</div>
         </>
       )}
+      {cobro && <CobroModal o={cobro} pagos={pagos} puntos={puntos} onCobrado={recargar} onCerrar={() => setCobro(null)} />}
     </>
   );
 }

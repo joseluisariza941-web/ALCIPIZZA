@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { isBebida, money, UNIDADES } from './util.js';
+import { isBebida, money } from './util.js';
+import SelectUnidad from './SelectUnidad.jsx';
 import { platoAForm, validarPlato } from './platos.js';
 import { leerImagen } from './imagen.js';
 import { toast, toastError } from './toast.js';
@@ -69,9 +70,7 @@ export default function PlatoModal({ plato, platos, extras, insumos, onCerrar, o
                 <div className="fg irow" key={i}>
                   <input list="il" placeholder="Insumo" value={g.insumo} onChange={e => fila('ingredientes', i, 'insumo', e.target.value)} />
                   <input type="number" step="any" placeholder="Cantidad" value={g.cantidad} style={{ maxWidth: 110 }} onChange={e => fila('ingredientes', i, 'cantidad', e.target.value)} />
-                  <select style={{ maxWidth: 80 }} aria-label="Unidad" value={g.unidad} onChange={e => fila('ingredientes', i, 'unidad', e.target.value)}>
-                    {UNIDADES.map(u => <option key={u}>{u}</option>)}
-                  </select>
+                  <SelectUnidad style={{ maxWidth: 90 }} value={g.unidad} onChange={e => fila('ingredientes', i, 'unidad', e.target.value)} />
                   <button className="btn s" aria-label="Quitar" onClick={() => quitar('ingredientes', i)}>✕</button>
                 </div>
               ))}

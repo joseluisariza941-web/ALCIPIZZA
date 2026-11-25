@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Alci\Servicios;
 
 use Alci\Core\Db;
+use Alci\Servicios\Archivo;
 
 final class Usuarios
 {
@@ -24,18 +25,22 @@ final class Usuarios
     /** Usuario público (sin datos sensibles). */
     public static function publico(array $u): array
     {
-        return [
+        $r = [
             'id' => (int) $u['id'], 'usuario' => $u['usuario'], 'nombre' => $u['nombre'], 'rol' => $u['rol'],
             'activo' => (bool) (int) $u['activo'], 'debeCambiarClave' => (bool) (int) $u['debe_cambiar_clave'],
         ];
+        return Archivo::marcar($r, $u);
     }
 
-    public static function porId(int $id): ?array { return Db::uno('SELECT * FROM usuarios WHERE id = ?', [$id]); }
+    public static function porId(int $id, bool $incluirEliminados = false): ?array
+    {
+        return Db::uno('SELECT * FROM usuarios WHERE id = ?' . ($incluirEliminados ? '' : ' AND eliminado_en IS NULL'), [$id]);
+    }
 
     /** Incluye `bloqueado` (0/1) calculado en MySQL. */
     public static function porUsuario(string $usuario): ?array
     {
         return Db::uno('SELECT *, (bloqueado_hasta IS NOT NULL AND bloqueado_hasta > NOW()) AS bloqueado
-            FROM usuarios WHERE usuario = ?', [$usuario]);
+            FROM usuarios WHERE usuario = ? AND eliminado_en IS NULL', [$usuario]);
     }
 }

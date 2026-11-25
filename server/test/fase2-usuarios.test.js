@@ -68,9 +68,13 @@ describe('Fase 2 · usuarios', () => {
     await send(admin, 'delete', `/api/usuarios/${yo.id}`).expect(403);
     const devYo = await db('usuarios').where({ usuario: 'dev' }).first();
     await send(dev, 'delete', `/api/usuarios/${devYo.id}`).expect(400);
-    await send(admin, 'delete', `/api/usuarios/${lucia.id}`).expect(200);
-    await send(dev, 'delete', `/api/usuarios/${jefe.id}`).expect(200);
-    expect(await db('usuarios').whereIn('id', [lucia.id, jefe.id])).toEqual([]);
+    await send(admin, 'delete', `/api/usuarios/${lucia.id}`).expect(200, { ok: true });
+    await send(dev, 'delete', `/api/usuarios/${jefe.id}`).expect(200, { ok: true });
+    const filas = await db('usuarios').whereIn('id', [lucia.id, jefe.id]).orderBy('id');
+    expect(filas).toHaveLength(2);
+    for (const fila of filas) expect(fila.eliminado_en).toBeTruthy();
+    expect((await admin.get('/api/usuarios')).body.map(u => u.id)).not.toContain(lucia.id);
+    expect((await dev.get('/api/usuarios?eliminados=1')).body.map(u => u.id)).toEqual(expect.arrayContaining([lucia.id, jefe.id]));
   });
 });
 

@@ -53,7 +53,7 @@ describe('Comidas: platos y bebidas', () => {
     renderWith(<Comidas />);
     const fila = (await screen.findByText('Pizza', { selector: 'b' })).closest('tr');
     await userEvent.click(within(fila).getByRole('button', { name: 'Eliminar' }));
-    expect(confirm).toHaveBeenCalledWith('¿Eliminar este plato?');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('se puede restaurar'));
     expect(llamada(f, 'DELETE', '/api/admin/platos/1')).toBeTruthy();
   });
 
@@ -165,7 +165,7 @@ describe('Comidas: extras', () => {
     const f = mockApi({ ...base, 'DELETE /api/admin/extras/4': { ok: true } });
     await abrirExtras();
     await userEvent.click(await screen.findByRole('button', { name: 'Eliminar' }));
-    expect(confirm).toHaveBeenCalledWith('¿Eliminar este extra?');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('se puede restaurar'));
     expect(llamada(f, 'DELETE', '/api/admin/extras/4')).toBeTruthy();
   });
 

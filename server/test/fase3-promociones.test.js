@@ -35,8 +35,13 @@ describe('Fase 3 · B11 CRUD de promociones', () => {
     const ed = await send(admin, 'put', `/api/promociones/${p.id}`, { valor: 15, activa: false, dias: null }).expect(200);
     expect(ed.body).toMatchObject({ valor: 15, activa: false, dias: null, vigente: false });
     await send(admin, 'delete', `/api/promociones/${p.id}`).expect(200, { ok: true });
+    expect((await admin.get('/api/promociones')).body.map(x => x.id)).not.toContain(p.id);
+    expect((await admin.get('/api/promociones?eliminados=1')).body.find(x => x.id === p.id).eliminadoEn).toEqual(expect.any(String));
     await send(admin, 'delete', `/api/promociones/${p.id}`).expect(404);
     await send(admin, 'put', `/api/promociones/${p.id}`, { valor: 5 }).expect(404);
+    await send(admin, 'post', `/api/promociones/${p.id}/restaurar`).expect(200);
+    expect((await admin.get('/api/promociones')).body.map(x => x.id)).toContain(p.id);
+    await send(admin, 'post', `/api/promociones/${p.id}/restaurar`).expect(404);
   });
 
   it('por categoría y al total', async () => {

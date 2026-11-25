@@ -42,7 +42,9 @@ describe('Fase 2 · insumos', () => {
     await send(admin, 'post', '/api/insumos', { nombre: 'X', tipo: 'insumo', unidad: 'litros' }).expect(400);
     const ed = await send(admin, 'put', `/api/insumos/${nuevo.body.id}`, { stock: 4.5 }).expect(200);
     expect(ed.body).toMatchObject({ nombre: 'Cebolla', stock: 4.5 });
-    await send(admin, 'delete', `/api/insumos/${nuevo.body.id}`).expect(200);
+    await send(admin, 'delete', `/api/insumos/${nuevo.body.id}`).expect(200, { ok: true });
+    expect((await db('insumos').where({ id: nuevo.body.id }).first()).eliminado_en).toBeTruthy();
+    expect((await admin.get('/api/insumos')).body.find(i => i.id === nuevo.body.id)).toBeUndefined();
     await send(admin, 'delete', `/api/insumos/${nuevo.body.id}`).expect(404);
   });
 
@@ -184,21 +186,24 @@ describe('Fase 2 · platos', () => {
     await send(admin, 'put', '/api/admin/platos/999999', res.body).expect(404);
   });
 
-  it('borrar un plato con pedidos solo lo desactiva; sin pedidos, lo elimina', async () => {
+  it('borrar un plato lo oculta sin borrarlo ni cambiar su activo', async () => {
     const cliente = await agente(app);
     await send(cliente, 'post', '/api/pedidos', {
       destino: 'Recoger en local', cliente: 'Eva', telefono: '300', metodoPago: 'ef',
       items: [{ platoId: creado.id, varianteId: creado.variantes[0].id }],
     }).expect(201);
-    let res = await send(admin, 'delete', `/api/admin/platos/${creado.id}`).expect(200);
-    expect(res.body).toEqual({ ok: true, desactivado: true });
-    expect((await db('platos').where({ id: creado.id }).first()).activo).toBe(0);
+    await send(admin, 'delete', `/api/admin/platos/${creado.id}`).expect(200, { ok: true });
+    const fila = await db('platos').where({ id: creado.id }).first();
+    expect(fila.eliminado_en).toBeTruthy();
+    expect(Number(fila.activo)).toBe(1);
+    expect((await admin.get('/api/admin/platos')).body.find(p => p.id === creado.id)).toBeUndefined();
+    expect((await admin.get('/api/admin/platos?eliminados=1')).body.find(p => p.id === creado.id).eliminadoEn).toEqual(expect.any(String));
     const otro = (await send(admin, 'post', '/api/admin/platos', {
       nombre: 'Temporal', categoria: 'Mexicana', variantes: [{ nombre: 'U', precio: 1000 }],
     }).expect(201)).body;
-    res = await send(admin, 'delete', `/api/admin/platos/${otro.id}`).expect(200);
-    expect(res.body).toEqual({ ok: true, desactivado: false });
-    expect(await db('platos').where({ id: otro.id }).first()).toBeUndefined();
+    await send(admin, 'delete', `/api/admin/platos/${otro.id}`).expect(200, { ok: true });
+    expect((await db('platos').where({ id: otro.id }).first()).eliminado_en).toBeTruthy();
+    await send(admin, 'delete', `/api/admin/platos/${otro.id}`).expect(404);
   });
 });
 
@@ -233,16 +238,19 @@ describe('Fase 2 · ajustes', () => {
     await send(admin, 'post', '/api/metodos-pago', { nombre: '' }).expect(400);
     await send(ana, 'post', '/api/metodos-pago', { nombre: 'Otro' }).expect(403);
     expect((await request(app).get('/api/public/config')).body.pagos.map(p => p.codigo)).toContain(nuevo.body.codigo);
-    let res = await send(admin, 'delete', `/api/metodos-pago/${nuevo.body.codigo}`).expect(200);
-    expect(res.body).toEqual({ ok: true, desactivado: false });
+    await send(admin, 'delete', `/api/metodos-pago/${nuevo.body.codigo}`).expect(200, { ok: true });
+    expect((await db('metodos_pago').where({ codigo: nuevo.body.codigo }).first()).eliminado_en).toBeTruthy();
+    expect((await admin.get('/api/metodos-pago')).body.map(x => x.codigo)).not.toContain(nuevo.body.codigo);
+    expect((await admin.get('/api/metodos-pago?eliminados=1')).body.find(x => x.codigo === nuevo.body.codigo).eliminadoEn).toEqual(expect.any(String));
     await send(admin, 'delete', `/api/metodos-pago/${nuevo.body.codigo}`).expect(404);
     // uno usado en un pedido se desactiva para no perder el historial
     const usado = (await send(admin, 'post', '/api/metodos-pago', { nombre: 'Bold' }).expect(201)).body;
     const p = (await send(ana, 'post', '/api/pedidos', { destino: 'Mesa 1', items: [await itemCoca()] }).expect(201)).body.pedido;
     await send(ana, 'post', `/api/pedidos/${p.id}/pago`, { metodoPago: usado.codigo }).expect(200);
-    res = await send(admin, 'delete', `/api/metodos-pago/${usado.codigo}`).expect(200);
-    expect(res.body).toEqual({ ok: true, desactivado: true });
-    expect((await db('metodos_pago').where({ codigo: usado.codigo }).first()).activo).toBe(0);
+    await send(admin, 'delete', `/api/metodos-pago/${usado.codigo}`).expect(200, { ok: true });
+    const eliminado = await db('metodos_pago').where({ codigo: usado.codigo }).first();
+    expect(eliminado.eliminado_en).toBeTruthy();
+    expect(Number(eliminado.activo)).toBe(1);
   });
 });
 

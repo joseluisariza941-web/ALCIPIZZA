@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Alci\Rutas;
 
 use Alci\Core\{Auth, Db, Fmt, HttpError, RateLimit, Request, Respuesta, Router, Sesion, V};
-use Alci\Servicios\{Bitacora, Config, Horario, Puntos, Rango, Suscripcion};
+use Alci\Servicios\{Archivo, Bitacora, Config, Horario, Puntos, Rango, Suscripcion};
 use Alci\Servicios\Pedidos as P;
 
 /** Igual que routes/pedidos.js. */
@@ -39,6 +39,12 @@ final class Pedidos
             throw new HttpError(404, 'Pedido no encontrado');
         }
         return $fila;
+    }
+
+    /** El cliente web no canjea puntos: eso se hace en caja, al cobrar. */
+    private static function soloCaja(array $b): void
+    {
+        if (($b['canjearPuntos'] ?? 0) > 0) throw new HttpError(403, 'Los puntos se canjean en caja, al pagar', 'PUNTOS_SOLO_CAJA');
     }
 
     /** Reemplaza los datos de un pedido "nuevo" (cliente o personal): reliquida, repone inventario y ajusta puntos. */
@@ -78,6 +84,7 @@ final class Pedidos
             }
             $staff = (bool) $u;
             $b = P::validar($req->body);
+            if (!$staff) self::soloCaja($b);
             $cfg = Config::leer();
             $metodos = Config::metodosPago();
             if (!$staff) {
@@ -119,7 +126,7 @@ final class Pedidos
                     'Invalid option: expected one of ' . implode('|', array_map(fn($e) => "\"$e\"", self::ESTADOS)));
             }
             ['desde' => $desde, 'hasta' => $hasta] = Rango::rango($f, true);
-            $where = 'p.creado_en >= ? AND p.creado_en < ?';
+            $where = 'p.creado_en >= ? AND p.creado_en < ?' . Archivo::condicion($req, false, true, 'p.');
             $p = [Fmt::sql($desde), Fmt::sql($hasta)];
             if (isset($f['estado'])) { $where .= ' AND p.estado = ?'; $p[] = $f['estado']; }
             return P::cargarPedidos($where, $p);
@@ -159,6 +166,7 @@ final class Pedidos
         $r->post('/api/pedidos/cotizar', function (Request $req) {
             if (!Sesion::get('userId')) RateLimit::exigir('cotizar', 120, 60, $req->ip, 'Demasiadas consultas. Espera un momento.');
             $b = P::validar($req->body);
+            if (!Sesion::get('userId')) self::soloCaja($b);
             ['items' => $items, 'total' => $subtotal] = P::cotizar($b['items']);
             $l = P::liquidar($items, $subtotal, $b['canjearPuntos'] ?? 0, $b['celular'] ?? null);
             return [
@@ -193,6 +201,7 @@ final class Pedidos
             unset($body['token']);
             $cfg = Config::leer();
             $b = P::validar($body);
+            self::soloCaja($b);
             if ($b['destino'] === 'Domicilio' && ($cfg['domiciliosActivos'] ?? true) === false) {
                 throw new HttpError(409, 'Por ahora no tenemos servicio a domicilio. Puedes recoger en el local o pedir en una mesa.', 'DOMICILIOS_APAGADOS');
             }
@@ -230,16 +239,36 @@ final class Pedidos
             $d = $req->datos();
             $metodo = $d['metodoPago'] ?? null;
             if (!is_string($metodo) || mb_strlen($metodo) < 1 || mb_strlen($metodo) > 10) V::fallo('Elige el método de pago', 'metodoPago');
+            $celular = null;
+            if (($d['celular'] ?? null) !== null && $d['celular'] !== '') $celular = Puntos::normalizar($d['celular']);
+            $canje = $d['canjearPuntos'] ?? 0;
+            if (!is_int($canje) || $canje < 0 || $canje > 1000000) V::fallo('Puntos a canjear no válidos', 'canjearPuntos');
             $actual = self::existente($id);
-            $m = Db::uno('SELECT * FROM metodos_pago WHERE codigo = ?', [$metodo]);
+            $m = Db::uno('SELECT * FROM metodos_pago WHERE codigo = ? AND eliminado_en IS NULL', [$metodo]);
             if (!$m) throw new HttpError(400, 'Método de pago no válido');
             if ($actual['pago_estado'] === 'pagado') throw new HttpError(409, 'El pedido ya está pagado');
-            Db::tx(function () use ($req, $id, $m, $user, $actual) {
-                $n = Db::ejecutar("UPDATE pedidos SET pago_estado = 'pagado', metodo_pago = ?, pagado_en = NOW(), cobrado_por = ? WHERE id = ? AND pago_estado <> 'pagado'",
-                    [$m['codigo'], (int) $user['id'], $id]);
+            Db::tx(function () use ($req, $id, $m, $user, $celular, $canje) {
+                $a = Db::uno('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [$id]);
+                if (!$a || $a['pago_estado'] === 'pagado') throw new HttpError(409, 'El pedido ya está pagado');
+                $original = $a;
+                if ($celular !== null) $a['celular'] = $celular;
+                $cols = ['celular' => $a['celular']];
+                if ($canje > 0) {
+                    if ($a['estado'] === 'cancelado') throw new HttpError(409, 'El pedido está cancelado: no se pueden canjear puntos');
+                    // el canje del cobro reemplaza al que traía el pedido (si lo traía)
+                    Puntos::devolverCanje($original);
+                    $base = (float) $a['subtotal'] - (float) $a['descuento_promo'];
+                    [$puntos, $desc] = Puntos::canje($canje, $a['celular'], $base);
+                    Puntos::debitar($a['celular'], $puntos, $id);
+                    $cols += ['puntos_canjeados' => $puntos, 'descuento_puntos' => $desc, 'total' => max(0, Fmt::num($base - $desc))];
+                }
+                $n = Db::actualizar('pedidos', [...$cols, 'pago_estado' => 'pagado', 'metodo_pago' => $m['codigo'], 'cobrado_por' => (int) $user['id']],
+                    "id = ? AND pago_estado <> 'pagado'", [$id]);
                 if (!$n) throw new HttpError(409, 'El pedido ya está pagado');
-                if ($actual['estado'] !== 'cancelado') Puntos::ganar($actual);
-                Bitacora::registrar($req, "Confirmó pago #$id ({$m['nombre']}) " . P::pesos($actual['total']));
+                Db::ejecutar('UPDATE pedidos SET pagado_en = NOW() WHERE id = ?', [$id]);
+                $final = Db::uno('SELECT * FROM pedidos WHERE id = ?', [$id]);
+                if ($final['estado'] !== 'cancelado') Puntos::ganar($final);
+                Bitacora::registrar($req, "Confirmó pago #$id ({$m['nombre']}) " . P::pesos($final['total']));
             });
             return P::cargarPedido($id);
         });

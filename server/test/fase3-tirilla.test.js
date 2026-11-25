@@ -72,7 +72,9 @@ describe('Fase 3 · B7 el cliente cancela su pedido', () => {
 
   it('devuelve los puntos canjeados y quita los ganados', async () => {
     await db('puntos_clientes').insert({ celular: '3001234567', saldo: 100 });
-    const p = await nuevo({ celular: '3001234567', canjearPuntos: 100 });
+    const p = await nuevo({ celular: '3001234567' });
+    await send(ana, 'post', `/api/pedidos/${p.id}/pago`, { metodoPago: 'nq', canjearPuntos: 100 }).expect(200);
+    expect((await db('puntos_clientes').where({ celular: '3001234567' }).first()).saldo).toBe(Math.floor((precio() - 1000) / 1000));
     await cancelar(p).expect(200);
     expect((await db('puntos_clientes').where({ celular: '3001234567' }).first()).saldo).toBe(100);
   });
@@ -102,16 +104,17 @@ describe('Fase 3 · B7 el cliente edita su pedido', () => {
     await editar(p, { items: [item()] }).expect(200); // el mismo token sigue valiendo
   });
 
-  it('reliquida con promoción y puntos', async () => {
+  it('reliquida con promoción y no permite canjear puntos', async () => {
     await send(admin, 'post', '/api/promociones', {
       nombre: 'P', tipo: 'monto', alcance: 'plato', platoId: hamb().id, valor: 1000, inicio: '2020-01-01', fin: '2099-12-31',
     }).expect(201);
     await db('puntos_clientes').insert({ celular: '3001234567', saldo: 200 });
-    const p = await nuevo({ celular: '3001234567', canjearPuntos: 100 });
-    expect(p.total).toBe(precio() - 1000 - 1000);
-    const r = (await editar(p, { items: [item(), item()], celular: '3001234567', canjearPuntos: 200 }).expect(200)).body;
-    expect(r).toMatchObject({ subtotal: precio() * 2, descuentoPromo: 2000, puntosCanjeados: 200, descuentoPuntos: 2000, total: precio() * 2 - 4000 });
-    expect((await db('puntos_clientes').where({ celular: '3001234567' }).first()).saldo).toBe(0);
+    const p = await nuevo({ celular: '3001234567' });
+    expect(p.total).toBe(precio() - 1000);
+    const r = (await editar(p, { items: [item(), item()], celular: '3001234567' }).expect(200)).body;
+    expect(r).toMatchObject({ subtotal: precio() * 2, descuentoPromo: 2000, puntosCanjeados: 0, descuentoPuntos: 0, total: precio() * 2 - 2000 });
+    const canje = await editar(p, { celular: '3001234567', canjearPuntos: 200 }).expect(403);
+    expect(canje.body.code).toBe('PUNTOS_SOLO_CAJA');
     const sinCanje = (await editar(p, { celular: '3001234567', canjearPuntos: 0 }).expect(200)).body;
     expect(sinCanje).toMatchObject({ puntosCanjeados: 0, descuentoPuntos: 0, total: precio() - 1000 });
     expect((await db('puntos_clientes').where({ celular: '3001234567' }).first()).saldo).toBe(200);

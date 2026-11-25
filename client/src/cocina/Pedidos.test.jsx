@@ -121,6 +121,29 @@ describe('Pestaña Pedidos', () => {
     expect(await screen.findByText('Conflicto de estado')).toHaveClass('toast');
   });
 
+  it('muestra las etiquetas del cliente, la promoción y los descuentos', async () => {
+    mockApi({ ...base, 'GET /api/pedidos': [pedido({ editadoEn: '2026-11-23T20:05:00Z', promocion: { id: 1, nombre: '2x1' }, descuentoPromo: 3000, descuentoPuntos: 1000 }),
+      pedido({ id: 2, canceladoPorCliente: true, estado: 'cancelado' })] });
+    pagina();
+    expect(await screen.findByText('Editado por el cliente')).toBeInTheDocument();
+    expect(screen.getByText('Promoción 2x1: -$3.000')).toBeInTheDocument();
+    expect(screen.getByText('Puntos: -$1.000')).toBeInTheDocument();
+  });
+
+  it('cobra un pedido listo con el método elegido', async () => {
+    const f = mockApi({
+      ...base,
+      'GET /api/public/config': { config, pagos: [{ codigo: 'ef', nombre: 'Efectivo', numero: '', activo: true }], abierto: true, suscripcionActiva: true },
+      'GET /api/pedidos': [pedido({ estado: 'listo' })],
+      'POST /api/pedidos/1/pago': pedido({ pagoEstado: 'pagado' }),
+    });
+    pagina();
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirmar pago' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Efectivo' }));
+    const call = f.mock.calls.find(([u, o]) => u === '/api/pedidos/1/pago' && o.method === 'POST');
+    expect(JSON.parse(call[1].body)).toEqual({ metodoPago: 'ef' });
+  });
+
   it('el botón de WhatsApp abre el ticket', async () => {
     mockApi({ ...base, 'GET /api/pedidos': [pedido()] });
     const open = vi.fn(); vi.stubGlobal('open', open);

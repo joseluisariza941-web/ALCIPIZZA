@@ -4,6 +4,7 @@ import { useCarga } from './hooks.js';
 import { fd } from './util.js';
 import { validarCambioMesera, validarMesera } from './personal.js';
 import { toast, toastError } from './toast.js';
+import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 
 const VACIA = { nombre: '', usuario: '', clave: '' };
 
@@ -45,7 +46,7 @@ export default function Personal() {
     recargar();
   }
   async function quitar(m) {
-    if (!confirm(`¿Quitar a ${m.nombre}?`)) return;
+    if (!confirm(textoOcultar(`a ${m.nombre}`))) return;
     try { await api.del(`/api/usuarios/${m.id}`); } catch (e) { toastError(e); }
     recargar();
   }
@@ -58,6 +59,7 @@ export default function Personal() {
         <table>
           <tbody>{meseras.map(m => <Fila key={m.id} m={m} onCambio={cambiar} onQuitar={quitar} />)}</tbody>
         </table>
+        <FiltroEliminados ruta="/api/usuarios" nombre={u => `${u.nombre} (${u.usuario})`} version={us.data} filtrar={u => u.rol === 'mesera'} onRestaurado={recargar} />
         <div className="fg">
           <input placeholder="Nombre" {...campo('nombre')} />
           <input placeholder="Usuario" {...campo('usuario')} />

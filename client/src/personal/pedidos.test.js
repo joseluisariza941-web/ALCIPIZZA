@@ -6,17 +6,18 @@ import { usePolling } from './usePolling.js';
 const p = (id, o) => ({ id, origen: 'mesera', mesera: { id: 3, nombre: 'Ana' }, destino: 'Mesa 1', estado: 'nuevo', ...o });
 
 describe('historial de la mesera', () => {
-  it('separa listos, compras web (sin canceladas) y mis pedidos', () => {
+  it('separa listos, compras web (sin canceladas, salvo las que canceló el cliente) y mis pedidos', () => {
     const lista = [
       p(6, { estado: 'listo' }),
       p(5, { origen: 'web', mesera: null, estado: 'cancelado' }),
+      p(7, { origen: 'web', mesera: null, estado: 'cancelado', canceladoPorCliente: true }),
       p(4, { origen: 'web', mesera: null, estado: 'listo' }),
       p(3, { mesera: { id: 9, nombre: 'Luz' }, estado: 'listo' }),
       p(2),
     ];
     const h = historial(lista, 3);
     expect(h.listos.map(x => x.id)).toEqual([6, 4]);
-    expect(h.web.map(x => x.id)).toEqual([4]);
+    expect(h.web.map(x => x.id)).toEqual([7, 4]);
     expect(h.mios.map(x => x.id)).toEqual([6, 2]);
   });
 

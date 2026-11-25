@@ -11,6 +11,7 @@ const item = () => ({ platoId: hamb().id, varianteId: hamb().variantes[0].id });
 const CEL = '3001234567';
 const web = (o = {}) => ({ destino: 'Recoger en local', cliente: 'Juan', telefono: CEL, metodoPago: 'nq', items: [item()], ...o });
 const pedir = async (o, esperado = 201) => (await send(await agente(app), 'post', '/api/pedidos', web(o)).expect(esperado)).body.pedido;
+const pedirMesa = async (o, esperado = 201) => (await send(ana, 'post', '/api/pedidos', web(o)).expect(esperado)).body.pedido;
 const pagar = id => send(admin, 'post', `/api/pedidos/${id}/pago`, { metodoPago: 'nq' });
 const estado = (id, e) => send(admin, 'patch', `/api/pedidos/${id}/estado`, { estado: e });
 const saldo = async (cel = CEL) => (await db('puntos_clientes').where({ celular: cel }).first())?.saldo ?? 0;
@@ -110,14 +111,14 @@ describe('Fase 3 · B10 ganar puntos', () => {
   });
 });
 
-describe('Fase 3 · B10 canjear puntos', () => {
+describe('Fase 3 · B10 canjear puntos (personal)', () => {
   it('descuenta del total y del saldo', async () => {
     await dar(350);
-    const p = await pedir({ celular: CEL, canjearPuntos: 100 });
+    const p = await pedirMesa({ celular: CEL, canjearPuntos: 100 });
     expect(p).toMatchObject({ puntosCanjeados: 100, descuentoPuntos: 1000, subtotal: precio(), total: precio() - 1000 });
     expect(await saldo()).toBe(250);
     expect(await movs()).toEqual([['canjeado', -100]]);
-    const q = await send(await agente(app), 'post', '/api/pedidos/cotizar', web({ celular: CEL, canjearPuntos: 200 })).expect(200);
+    const q = await send(ana, 'post', '/api/pedidos/cotizar', web({ celular: CEL, canjearPuntos: 200 })).expect(200);
     expect(q.body).toMatchObject({ puntosCanjeados: 200, descuentoPuntos: 2000, total: precio() - 2000 });
     expect(await saldo()).toBe(250);
   });
@@ -129,14 +130,14 @@ describe('Fase 3 · B10 canjear puntos', () => {
       inicio: '2020-01-01', fin: '2099-12-31',
     }).expect(201);
     const promo = Math.round(precio() * 0.1);
-    const p = await pedir({ celular: CEL, canjearPuntos: 100 });
+    const p = await pedirMesa({ celular: CEL, canjearPuntos: 100 });
     expect(p).toMatchObject({ descuentoPromo: promo, descuentoPuntos: 1000, total: precio() - promo - 1000 });
   });
 
   it('rechaza los canjes no válidos', async () => {
     await dar(250);
     const malo = async (o, st, code) => {
-      const r = await send(await agente(app), 'post', '/api/pedidos', web(o)).expect(st);
+      const r = await send(ana, 'post', '/api/pedidos', web(o)).expect(st);
       if (code) expect(r.body.code).toBe(code);
     };
     await malo({ celular: CEL, canjearPuntos: 150 }, 400, 'PUNTOS_INVALIDOS');
@@ -152,7 +153,7 @@ describe('Fase 3 · B10 canjear puntos', () => {
 
   it('al cancelar se devuelven los puntos canjeados', async () => {
     await dar(100);
-    const p = await pedir({ celular: CEL, canjearPuntos: 100 });
+    const p = await pedirMesa({ celular: CEL, canjearPuntos: 100 });
     expect(await saldo()).toBe(0);
     await estado(p.id, 'cancelado').expect(200);
     expect(await saldo()).toBe(100);

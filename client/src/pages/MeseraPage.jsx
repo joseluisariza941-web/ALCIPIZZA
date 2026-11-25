@@ -6,15 +6,16 @@ import { api } from '../api.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import Shell from '../components/Shell.jsx';
 import { carritoDesdePedido, cuerpoPedido, validarPedido } from '../personal/carrito.js';
-import { Cobrar, Historial, Recibo } from '../personal/Historial.jsx';
+import CobroModal from '../personal/CobroModal.jsx';
+import { Historial, Recibo } from '../personal/Historial.jsx';
 import { Menu, Personalizar } from '../personal/Menu.jsx';
 import { avisosListos, historial } from '../personal/pedidos.js';
 import { Confirmar, Ticket } from '../personal/Ticket.jsx';
 import { usePolling } from '../personal/usePolling.js';
 import { useToast } from '../personal/useToast.jsx';
 
-const SIN_DATOS = { destino: '', cliente: '', direccion: '', telefono: '' };
-const CONFIG_VACIA = { config: { n: '', tel: '', mesas: 0, w2: '', w4: '', logo: null }, pagos: [] };
+const SIN_DATOS = { destino: '', cliente: '', direccion: '', telefono: '', celular: '' };
+const CONFIG_VACIA = { config: { n: '', tel: '', mesas: 0, w2: '', w4: '', logo: null }, pagos: [], puntos: { activo: false, puntosCanje: 100, descuentoCanje: 1000 } };
 
 /** @typedef {{tipo:'pick', plato:any} | {tipo:'conf'} | {tipo:'cobrar', pedido:any} | {tipo:'recibo', pedido:any} | null} EstadoModal */
 
@@ -35,7 +36,7 @@ export default function MeseraPage() {
 
   useEffect(() => {
     api.get('/api/menu').then(setMenu).catch(() => aviso('No se pudo cargar el menú'));
-    api.get('/api/public/config').then(r => setCfg({ config: r.config, pagos: r.pagos || [] })).catch(() => {});
+    api.get('/api/public/config').then(r => setCfg(c => ({ config: r.config, pagos: r.pagos || [], puntos: { ...c.puntos, ...(r.puntos || {}) } }))).catch(() => {});
   }, [aviso]);
 
   const cargarPedidos = useCallback(async () => {
@@ -87,12 +88,10 @@ export default function MeseraPage() {
     onEditar: o => {
       setEdit(o.id);
       setCart(carritoDesdePedido(o, menu));
-      setDatos({ destino: o.destino, cliente: o.cliente || '', direccion: o.direccion || '', telefono: o.telefono || '' });
+      setDatos({ destino: o.destino, cliente: o.cliente || '', direccion: o.direccion || '', telefono: o.telefono || '', celular: o.celular || '' });
       setTab('n');
     },
   };
-
-  const pagar = (o, codigo) => { setModal(null); accion(() => api.post(`/api/pedidos/${o.id}/pago`, { metodoPago: codigo })); };
 
   const nListos = historial(pedidos, user.id).listos.length;
 
@@ -115,7 +114,7 @@ export default function MeseraPage() {
       {modal?.tipo === 'pick' && <Personalizar plato={modal.plato} onCerrar={() => setModal(null)}
         onAgregar={item => { setCart([...cart, item]); setModal(null); }} />}
       {modal?.tipo === 'conf' && <Confirmar cart={cart} datos={datos} enviando={enviando} onConfirmar={confirmar} onVolver={() => setModal(null)} />}
-      {modal?.tipo === 'cobrar' && <Cobrar o={modal.pedido} pagos={cfg.pagos} onPagar={c => pagar(modal.pedido, c)} onCerrar={() => setModal(null)} />}
+      {modal?.tipo === 'cobrar' && <CobroModal o={modal.pedido} pagos={cfg.pagos} puntos={cfg.puntos} onCobrado={cargarPedidos} onCerrar={() => setModal(null)} />}
       {modal?.tipo === 'recibo' && <Recibo o={modal.pedido} config={cfg.config} pagos={cfg.pagos} onCerrar={() => setModal(null)} />}
       {toast}
     </Shell>

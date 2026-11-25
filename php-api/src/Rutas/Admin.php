@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Alci\Rutas;
 
 use Alci\Core\{Auth, Db, Fmt, HttpError, Request, Router, V};
-use Alci\Servicios\{Bitacora, Rango};
+use Alci\Servicios\{Archivo, Bitacora, Rango};
 use Alci\Servicios\Pedidos as P;
 
 /** Facturas (historial de tirillas) y reinicio de reportes (rol cocina). */
@@ -26,7 +26,7 @@ final class Admin
             $f = Rango::rango(Rango::validar($req->query));
             $pagina = self::entero($req->query, 'pagina', 1, 1, 100000);
             $porPagina = self::entero($req->query, 'porPagina', 20, 1, 100);
-            $where = '1=1';
+            $where = '1=1' . Archivo::condicion($req, false, true, 'p.');
             $p = [];
             if ($f['desde']) { $where .= ' AND p.creado_en >= ?'; $p[] = Fmt::sql($f['desde']); }
             if ($f['hasta']) { $where .= ' AND p.creado_en < ?'; $p[] = Fmt::sql($f['hasta']); }
@@ -51,9 +51,10 @@ final class Admin
             Auth::rol($req, 'cocina');
             if (($req->datos()['confirmar'] ?? null) !== 'BORRAR') V::fallo('Escribe BORRAR para confirmar', 'confirmar');
             $n = Db::tx(function () {
-                $pedidos = Db::ejecutar('DELETE FROM pedidos'); // los ítems y sus detalles caen en cascada
-                $compras = Db::ejecutar('DELETE FROM compras');
-                $bitacora = Db::ejecutar('DELETE FROM bitacora');
+                $pedidos = Db::ejecutar("UPDATE pedidos SET archivado_en = NOW() WHERE archivado_en IS NULL
+                    AND (estado = 'cancelado' OR (estado = 'entregado' AND pago_estado = 'pagado'))");
+                $compras = Db::ejecutar('UPDATE compras SET archivado_en = NOW() WHERE archivado_en IS NULL');
+                $bitacora = Db::ejecutar('UPDATE bitacora SET archivado_en = NOW() WHERE archivado_en IS NULL');
                 return ['pedidos' => $pedidos, 'compras' => $compras, 'bitacora' => $bitacora];
             });
             Bitacora::registrar($req, 'Reinició los reportes');

@@ -12,7 +12,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await restaurar();
-  await db('insumos').whereIn('nombre', ['T3 Harina', 'T3 Aceite', 'T3 Aceite ml', 'T3 Leche', 'T3 Sal']).del();
+  await db('insumos').whereIn('nombre', ['T3 Harina', 'T3 Aceite', 'T3 Aceite ml', 'T3 Leche', 'T3 Sal', 'T3 Sal g']).del();
   await db.destroy();
 });
 
@@ -24,7 +24,7 @@ describe('Fase 3 · A2 borrar compras', () => {
     await send(admin, 'delete', `/api/compras/${c.id}`).expect(200, { ok: true });
     expect(await stock(ins.id)).toBe(1);
     expect(Number((await db('insumos').where({ id: ins.id }).first()).stock_referencia)).toBe(1);
-    expect(await db('compras').where({ id: c.id }).first()).toBeUndefined();
+    expect((await db('compras').where({ id: c.id }).first()).eliminado_en).toBeTruthy();
     const log = await db('bitacora').orderBy('id', 'desc').first();
     expect(log.accion).toContain('T3 Harina');
     await send(admin, 'delete', `/api/compras/${c.id}`).expect(404);
@@ -45,21 +45,20 @@ describe('Fase 3 · A2 borrar compras', () => {
 });
 
 describe('Fase 3 · A3 borrar insumos', () => {
-  it('con compras lo desactiva y lo oculta de la lista', async () => {
+  it('con compras lo oculta de la lista sin desactivarlo', async () => {
     const ins = (await send(admin, 'post', '/api/insumos', { nombre: 'T3 Leche', unidad: 'L' }).expect(201)).body;
     await send(admin, 'post', '/api/compras', { insumoId: ins.id, cantidad: 3, unidad: 'L', costo: 9000 }).expect(201);
-    const res = await send(admin, 'delete', `/api/insumos/${ins.id}`).expect(200);
-    expect(res.body).toEqual({ ok: true, desactivado: true });
+    await send(admin, 'delete', `/api/insumos/${ins.id}`).expect(200, { ok: true });
     expect((await admin.get('/api/insumos')).body.find(i => i.id === ins.id)).toBeUndefined();
-    expect((await db('insumos').where({ id: ins.id }).first()).activo).toBeFalsy();
+    expect((await db('insumos').where({ id: ins.id }).first()).eliminado_en).toBeTruthy();
     await send(admin, 'post', '/api/compras', { insumoId: ins.id, cantidad: 1, unidad: 'L' }).expect(400);
   });
 
-  it('sin compras lo borra de verdad', async () => {
+  it('sin compras también lo oculta sin borrarlo', async () => {
     const ins = (await send(admin, 'post', '/api/insumos', { nombre: 'T3 Sal', unidad: 'kg' }).expect(201)).body;
-    const res = await send(admin, 'delete', `/api/insumos/${ins.id}`).expect(200);
-    expect(res.body).toEqual({ ok: true, desactivado: false });
-    expect(await db('insumos').where({ id: ins.id }).first()).toBeUndefined();
+    await send(admin, 'delete', `/api/insumos/${ins.id}`).expect(200, { ok: true });
+    expect((await db('insumos').where({ id: ins.id }).first()).eliminado_en).toBeTruthy();
+    expect((await admin.get('/api/insumos?eliminados=1')).body.find(i => i.id === ins.id).eliminadoEn).toEqual(expect.any(String));
   });
 
   it('usado por platos: 409 con todos los nombres', async () => {
@@ -79,7 +78,7 @@ describe('Fase 3 · B2 unidades', () => {
     expect(await stock(ins.id)).toBe(2000);
     await send(admin, 'post', '/api/compras', { insumoId: ins.id, cantidad: 1, unidad: 'kg', costo: 1 }).expect(400);
     await send(admin, 'post', '/api/compras', { insumoId: ins.id, cantidad: 1, unidad: 'und', costo: 1 }).expect(400);
-    const masa = (await send(admin, 'post', '/api/insumos', { nombre: 'T3 Sal', unidad: 'g', stock: 0 }).expect(201)).body;
+    const masa = (await send(admin, 'post', '/api/insumos', { nombre: 'T3 Sal g', unidad: 'g', stock: 0 }).expect(201)).body;
     await send(admin, 'post', '/api/compras', { insumoId: masa.id, cantidad: 1, unidad: 'L', costo: 1 }).expect(400);
     await send(admin, 'post', '/api/compras', { insumoId: masa.id, cantidad: 1, unidad: 'lb', costo: 1 }).expect(201);
     expect(await stock(masa.id)).toBeCloseTo(453.592, 2);

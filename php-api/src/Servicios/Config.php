@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Alci\Servicios;
 
 use Alci\Core\Db;
+use Alci\Servicios\Archivo;
 
 final class Config
 {
@@ -26,13 +27,16 @@ final class Config
 
     public static function aMetodo(array $m): array
     {
-        return ['codigo' => $m['codigo'], 'nombre' => $m['nombre'], 'numero' => $m['numero'] ?? null, 'activo' => (bool) (int) $m['activo'],
+        $r = ['codigo' => $m['codigo'], 'nombre' => $m['nombre'], 'numero' => $m['numero'] ?? null, 'activo' => (bool) (int) $m['activo'],
             'qrUrl' => ($m['qr_url'] ?? '') !== '' ? $m['qr_url'] : null];
+        return Archivo::marcar($r, $m);
     }
 
-    public static function metodosPago(bool $soloActivos = false): array
+    public static function metodosPago(bool $soloActivos = false, bool $soloEliminados = false): array
     {
-        $sql = 'SELECT * FROM metodos_pago' . ($soloActivos ? ' WHERE activo = 1' : '') . ' ORDER BY orden';
-        return array_map([self::class, 'aMetodo'], Db::todos($sql));
+        $f = [];
+        if ($soloActivos) $f[] = 'activo = 1';
+        $f[] = $soloEliminados ? 'eliminado_en IS NOT NULL' : 'eliminado_en IS NULL';
+        return array_map([self::class, 'aMetodo'], Db::todos('SELECT * FROM metodos_pago WHERE ' . implode(' AND ', $f) . ' ORDER BY orden'));
     }
 }

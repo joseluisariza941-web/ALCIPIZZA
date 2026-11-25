@@ -358,7 +358,7 @@ final class Pedidos
                 'sin' => array_map(fn($s) => $s['ingrediente'], $sin[$id] ?? []),
             ];
         }
-        return array_map(fn($p) => [
+        return array_map(fn($p) => Archivo::marcar([
             'id' => (int) $p['id'],
             'creadoEn' => Fmt::iso($p['creado_en']),
             'origen' => $p['origen'],
@@ -383,7 +383,7 @@ final class Pedidos
             'pagadoEn' => Fmt::iso($p['pagado_en'] ?? null),
             'cobradoPor' => $p['cobrado_por'] ? ['id' => (int) $p['cobrado_por'], 'nombre' => $p['cobrador_nombre']] : null,
             'items' => $itemsDe[(int) $p['id']] ?? [],
-        ], $pedidos);
+        ], $p, true), $pedidos);
     }
 
     public static function cargarPedido(int $id): ?array

@@ -87,7 +87,7 @@ describe('Pestaña Personal: meseras', () => {
     const c = await tarjeta();
     await c.findByDisplayValue('Ana');
     await userEvent.click(c.getByRole('button', { name: 'Quitar' }));
-    expect(confirm).toHaveBeenCalledWith('¿Quitar a Ana?');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('se puede restaurar'));
     expect(llamada(f, 'DELETE', '/api/usuarios/3')).toBeTruthy();
   });
 });

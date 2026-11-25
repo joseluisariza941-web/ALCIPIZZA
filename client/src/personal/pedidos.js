@@ -10,7 +10,7 @@ const meToca = (o, meseraId) => o.mesera?.id === meseraId || o.origen === 'web';
 export function historial(pedidos, meseraId) {
   return {
     listos: pedidos.filter(o => o.estado === 'listo' && meToca(o, meseraId)),
-    web: pedidos.filter(o => o.origen === 'web' && o.estado !== 'cancelado'),
+    web: pedidos.filter(o => o.origen === 'web' && (o.estado !== 'cancelado' || o.canceladoPorCliente)),
     mios: pedidos.filter(o => o.mesera?.id === meseraId),
   };
 }

@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { useCarga } from './hooks.js';
-import { fd, fmtStock, money, nivel, stockBajo, UNIDADES } from './util.js';
+import { fd, fmtStock, money, nivel, stockBajo } from './util.js';
 import { filtrarCompras, nombreSurtidor, surtidorCompra, totalInvertido, ultimaCompra, validarCompra } from './inventario.js';
 import { toast, toastError } from './toast.js';
+import SelectUnidad from './SelectUnidad.jsx';
+import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 
 const VACIO = { nombre: '', tipo: 'insumo', cantidad: '', unidad: 'und', costo: '', surtidor: 'tienda' };
 
-/** Historial de compras con buscador (hc original). Se reutiliza en Reporte. */
-export function HistorialCompras({ compras }) {
+/**
+ * Historial de compras con buscador (hc original). Se reutiliza en Reporte.
+ * Con `onAnular` cada compra activa trae el botón "Anular".
+ */
+export function HistorialCompras({ compras, onAnular }) {
   const [q, setQ] = useState('');
   const l = filtrarCompras(compras, q);
   return (
@@ -16,11 +21,12 @@ export function HistorialCompras({ compras }) {
       <input placeholder="🔎 Buscar compra" value={q} onChange={e => setQ(e.target.value)} style={{ margin: '.6rem 0' }} />
       <table>
         <tbody>
-          <tr><th>Fecha y hora</th><th>Insumo</th><th>Cantidad</th><th>Costo</th><th>Surtidor</th><th>Registró</th></tr>
+          <tr><th>Fecha y hora</th><th>Insumo</th><th>Cantidad</th><th>Costo</th><th>Surtidor</th><th>Registró</th>{onAnular && <th />}</tr>
           {l.length ? l.map(c => (
             <tr key={c.id}><td>{fd(c.fecha)}</td><td>{c.insumo?.nombre}</td><td>{c.cantidad} {c.unidad}</td><td>{money(c.costo)}</td>
-              <td>{surtidorCompra(c)}</td><td>{c.registradoPor?.nombre || ''}</td></tr>
-          )) : <tr><td colSpan={6}>Sin compras registradas</td></tr>}
+              <td>{surtidorCompra(c)}</td><td>{c.registradoPor?.nombre || ''}</td>
+              {onAnular && <td>{c.archivadoEn ? <span className="bd">Archivada</span> : <button className="btn s" onClick={() => onAnular(c)}>Anular</button>}</td>}</tr>
+          )) : <tr><td colSpan={onAnular ? 7 : 6}>Sin compras registradas</td></tr>}
         </tbody>
       </table>
     </>
@@ -62,6 +68,9 @@ export default function Inventario() {
   const ins = useCarga('/api/insumos', /** @type {any[]} */ ([]));
   const com = useCarga('/api/compras', /** @type {any[]} */ ([]));
   const sur = useCarga('/api/surtidores', /** @type {any[]} */ ([]));
+  const [periodo, setPeriodo] = useState(/** @type {'actual'|'todo'|'archivadas'} */ ('actual'));
+  const hist = useCarga(periodo === 'actual' ? null : `/api/compras?archivados=${periodo === 'todo' ? 'incluir' : 'solo'}`, /** @type {any[]} */ ([]));
+  const [enUso, setEnUso] = useState(/** @type {null|{x:any, detalles:any[]}} */ (null));
   const [f, setF] = useState(VACIO);
   const set = k => e => setF({ ...f, [k]: e.target.value });
 
@@ -74,10 +83,32 @@ export default function Inventario() {
     ins.recargar();
   }
 
+  const recargarTodo = () => { ins.recargar(); com.recargar(); if (periodo !== 'actual') hist.recargar(); };
+
   async function onBorrar(x) {
-    if (!confirm(`¿Eliminar "${x.nombre}" del inventario?`)) return;
-    try { await api.del(`/api/insumos/${x.id}`); } catch (e) { toastError(e); }
-    ins.recargar(); com.recargar();
+    if (!confirm(textoOcultar(`"${x.nombre}" del inventario`))) return;
+    try { await api.del(`/api/insumos/${x.id}`); setEnUso(null); } catch (e) {
+      if (e?.status === 409 && e.data?.code === 'EN_USO') setEnUso({ x, detalles: e.data.detalles ?? [] });
+      else toastError(e);
+    }
+    recargarTodo();
+  }
+
+  async function forzar() {
+    if (!enUso) return;
+    const { x, detalles } = enUso;
+    const platos = [...new Set(detalles.map(d => d.plato))].join(', ');
+    if (!confirm(`Se quitará "${x.nombre}" de las recetas de: ${platos}. Esos platos dejarán de descontarlo del inventario y el insumo se ocultará (se puede restaurar). ¿Continuar?`)) return;
+    try { await api.del(`/api/insumos/${x.id}?forzar=1`); setEnUso(null); } catch (e) { toastError(e); }
+    recargarTodo();
+  }
+
+  async function anular(c) {
+    if (!confirm(`¿Anular esta compra de ${c.insumo?.nombre ?? 'producto'}?
+
+Se resta del stock. Queda en "Ver anuladas" y se puede restaurar.`)) return;
+    try { await api.del(`/api/compras/${c.id}`); toast('Compra anulada'); } catch (e) { toastError(e); }
+    recargarTodo();
   }
 
   async function compra() {
@@ -88,7 +119,7 @@ export default function Inventario() {
       setF(VACIO);
       toast(r.nuevo ? 'Producto creado y guardado' : 'Ingreso guardado');
     } catch (e) { toastError(e); }
-    ins.recargar(); com.recargar();
+    recargarTodo();
   }
 
   const props = { compras: com.data, surtidores: sur.data, onCantidad, onBorrar };
@@ -104,7 +135,7 @@ export default function Inventario() {
           <datalist id="ls">{ins.data.map(x => <option key={x.id}>{x.nombre}</option>)}</datalist>
           <select aria-label="Tipo" value={f.tipo} onChange={set('tipo')}><option value="insumo">Insumo</option><option value="salsa">Salsa</option></select>
           <input type="number" step="any" placeholder="Cantidad" value={f.cantidad} onChange={set('cantidad')} />
-          <select aria-label="Unidad" value={f.unidad} onChange={set('unidad')}>{['und', 'g', 'kg', 'lb'].map(u => <option key={u}>{u}</option>)}</select>
+          <SelectUnidad value={f.unidad} onChange={set('unidad')} />
           <input type="number" placeholder="Costo total COP" value={f.costo} onChange={set('costo')} />
           <select aria-label="Surtidor" value={f.surtidor} onChange={set('surtidor')}>
             <option value="tienda">🏪 Compra en tienda</option>
@@ -113,11 +144,29 @@ export default function Inventario() {
           <button className="btn" onClick={compra}>Guardar en inventario</button>
         </div>
       </div>
+      {enUso && (
+        <div className="card" role="alert" style={{ marginBottom: '1rem' }}>
+          <p><b>No se puede eliminar "{enUso.x.nombre}" todavía.</b></p>
+          <p>Lo usan: {[...new Set(enUso.detalles.map(d => d.plato))].join(', ')}</p>
+          <button className="btn s y" onClick={forzar}>Quitarlo de esos platos y eliminar</button>{' '}
+          <button className="btn s" onClick={() => setEnUso(null)}>Cancelar</button>
+        </div>
+      )}
+      <FiltroEliminados ruta="/api/insumos" nombre={x => `${x.nombre} (${x.tipo === 'salsa' ? 'salsa' : 'insumo'})`} version={ins.data} onRestaurado={recargarTodo} />
       <div className="card scr" style={{ marginBottom: '1rem' }}><h3>Insumos</h3><TablaInsumos lista={ins.data.filter(x => x.tipo !== 'salsa')} {...props} /></div>
       <div className="card scr" style={{ marginBottom: '1rem' }}><h3>Salsas</h3><TablaInsumos lista={ins.data.filter(x => x.tipo === 'salsa')} {...props} /></div>
-      <div className="card scr"><h3>Historial de compras</h3><HistorialCompras compras={com.data} /></div>
+      <div className="card scr">
+        <h3>Historial de compras</h3>
+        <div className="row" style={{ margin: '.4rem 0' }}>
+          {[['actual', 'Periodo actual'], ['todo', 'Todo'], ['archivadas', 'Archivadas']].map(([k, t]) => (
+            <button key={k} className={`btn s ${periodo === k ? 'y' : ''}`} aria-pressed={periodo === k} onClick={() => setPeriodo(/** @type {any} */ (k))}>{t}</button>
+          ))}
+        </div>
+        <HistorialCompras compras={periodo === 'actual' ? com.data : hist.data} onAnular={anular} />
+        <FiltroEliminados ruta="/api/compras" etiqueta="Ver anuladas" version={com.data} onRestaurado={recargarTodo}
+          nombre={c => `${c.insumo?.nombre ?? 'Compra'} · ${c.cantidad} ${c.unidad} · ${money(c.costo)}`} />
+      </div>
     </>
   );
 }
 
-export { UNIDADES };

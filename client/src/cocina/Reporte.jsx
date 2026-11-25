@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useCarga } from './hooks.js';
 import { fd, money, rangoSemana } from './util.js';
-import { diasDelRango, estrellas, filtrarVentas, kpis } from './reporte.js';
+import { ARCHIVADOS, diasDelRango, estrellas, filtrarVentas, kpis, qsReporte } from './reporte.js';
 import { HistorialCompras } from './Inventario.jsx';
+import Facturas from './Facturas.jsx';
 
 const VACIO = { total: 0, pedidos: 0, compras: 0, porPlato: [], porMetodo: [], porDia: [] };
 
@@ -51,7 +52,9 @@ function HistorialVentas({ pedidos }) {
 export default function Reporte() {
   const semana = rangoSemana();
   const [r, setR] = useState(semana);
-  const qs = `desde=${r.desde}&hasta=${r.hasta}`;
+  const [arch, setArch] = useState('');
+  const [vista, setVista] = useState('resumen');
+  const qs = qsReporte(r, arch);
   const rep = useCarga(`/api/reportes/ventas?${qs}`, /** @type {any} */ (VACIO));
   const ped = useCarga(`/api/pedidos?${qs}`, /** @type {any[]} */ ([]));
   const com = useCarga(`/api/compras?${qs}`, /** @type {any[]} */ ([]));
@@ -71,10 +74,23 @@ export default function Reporte() {
   return (
     <>
       <h2>{esSemana ? 'Reporte de la semana' : 'Reporte del periodo'}</h2>
-      <div className="fg" style={{ margin: '.6rem 0' }}>
-        <label style={{ margin: 0 }}>Desde<input type="date" value={r.desde} max={r.hasta} onChange={fecha('desde')} /></label>
-        <label style={{ margin: 0 }}>Hasta<input type="date" value={r.hasta} min={r.desde} onChange={fecha('hasta')} /></label>
+      <div className="row" style={{ marginBottom: '.6rem' }}>
+        <button className={`btn s ${vista === 'resumen' ? 'y' : ''}`} onClick={() => setVista('resumen')}>Resumen</button>
+        <button className={`btn s ${vista === 'facturas' ? 'y' : ''}`} onClick={() => setVista('facturas')}>Facturas</button>
       </div>
+      <div className="fg" style={{ margin: '.6rem 0' }}>
+        {vista === 'resumen' && <>
+          <label style={{ margin: 0 }}>Desde<input type="date" value={r.desde} max={r.hasta} onChange={fecha('desde')} /></label>
+          <label style={{ margin: 0 }}>Hasta<input type="date" value={r.hasta} min={r.desde} onChange={fecha('hasta')} /></label>
+        </>}
+        <label style={{ margin: 0 }}>Mostrar
+          <select aria-label="Archivados" value={arch} onChange={e => setArch(e.target.value)}>
+            {ARCHIVADOS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </label>
+      </div>
+      {vista === 'facturas' && <Facturas archivados={arch} />}
+      {vista === 'resumen' && <>
       <div className="stars">
         <Estrella e={est.plato} bebida={false} titulo="Plato estrella" />
         <Estrella e={est.bebida} bebida titulo="Bebida estrella" />
@@ -129,6 +145,7 @@ export default function Reporte() {
         <h3>Historial de compra de insumos</h3>
         <HistorialCompras compras={com.data} />
       </div>
+    </>}
     </>
   );
 }

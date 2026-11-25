@@ -5,7 +5,7 @@ import { pesos } from './formato.js';
 
 /**
  * @typedef {import('./carrito.js').ItemCarrito} ItemCarrito
- * @typedef {{ destino:string, cliente:string, direccion:string, telefono:string }} Datos
+ * @typedef {{ destino:string, cliente:string, direccion:string, telefono:string, celular?:string }} Datos
  */
 
 /**
@@ -28,7 +28,7 @@ export function Ticket({ cart, datos, mesas, edit, onDatos, onQuitar, onEnviar, 
       )) : <p className="sm">Elige un plato del menú para empezar tu pedido.</p>}
       <hr />
       <Total valor={totalCarrito(cart)} />
-      <label>Destino<select value={d} onChange={e => onDatos({ destino: e.target.value, cliente: '', direccion: '', telefono: '' })}>
+      <label>Destino<select value={d} onChange={e => onDatos({ destino: e.target.value, cliente: '', direccion: '', telefono: '', celular: datos.celular || '' })}>
         <option value="" disabled>Elige la mesa o domicilio…</option>
         {ops.map(o => <option key={o}>{o}</option>)}
       </select></label>
@@ -37,6 +37,8 @@ export function Ticket({ cart, datos, mesas, edit, onDatos, onQuitar, onEnviar, 
         <label>Dirección<input value={datos.direccion} onChange={campo('direccion')} /></label>
         <label>Teléfono (opcional)<input type="tel" inputMode="tel" value={datos.telefono} onChange={campo('telefono')} placeholder="Para avisarte cuando esté listo" /></label>
       </>}
+      <label>Celular del cliente (opcional)<input type="tel" inputMode="numeric" maxLength={13} value={datos.celular || ''}
+        onChange={campo('celular')} placeholder="Para que acumule puntos" /></label>
       <button className="btn" style={{ width: '100%', marginTop: '.8rem' }} onClick={onEnviar}>{edit ? 'Guardar cambios' : 'Enviar pedido'}</button>
       {edit ? <button className="btn y s" style={{ marginTop: '.5rem' }} onClick={onCancelarEdicion}>Cancelar edición</button> : null}
     </aside>
@@ -57,7 +59,7 @@ export function Confirmar({ cart, datos, enviando, onConfirmar, onVolver }) {
         <hr />
         <Total valor={totalCarrito(cart)} style={{ fontSize: '1.3rem' }} />
         <p className="sm" style={{ margin: '.5rem 0' }}>
-          {datos.destino}{datos.cliente ? ' · ' + datos.cliente : ''}{datos.direccion ? ' · ' + datos.direccion : ''}{datos.telefono ? ' · 📞 ' + datos.telefono : ''}
+          {datos.destino}{datos.cliente ? ' · ' + datos.cliente : ''}{datos.direccion ? ' · ' + datos.direccion : ''}{datos.telefono ? ' · 📞 ' + datos.telefono : ''}{datos.celular ? ' · puntos: ' + datos.celular : ''}
         </p>
         <div className="row">
           <button className="btn" disabled={enviando} onClick={onConfirmar}>✅ Confirmar y enviar</button>

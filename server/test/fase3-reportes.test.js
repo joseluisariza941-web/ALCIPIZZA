@@ -65,10 +65,14 @@ describe('Fase 3 · B1 reiniciar reportes', () => {
     expect((await db('pedidos').count({ n: '*' }).first()).n).toBeGreaterThan(0);
   });
 
-  it('borra pedidos, compras y bitácora sin tocar menú, insumos, stock, usuarios ni ajustes', async () => {
+  it('archiva pedidos cerrados, compras y bitácora sin borrar nada ni tocar stock ni ajustes', async () => {
     const carne = await db('insumos').where({ nombre: 'Carne' }).first();
     await send(admin, 'post', '/api/compras', { insumoId: carne.id, cantidad: 1, unidad: 'lb', costo: 100 }).expect(201);
+    await db('pedidos').whereNull('archivado_en').update({ estado: 'cancelado' });
+    const vivo = (await send(ana, 'post', '/api/pedidos', { destino: 'Mesa 2', items: [item()] }).expect(201)).body.pedido;
+    const cerrados = (await db('pedidos').whereNull('archivado_en').whereIn('estado', ['cancelado', 'entregado']).select('id'));
     const antes = {
+      pedidos: (await db('pedidos').count({ n: '*' }).first()).n,
       insumos: await db('insumos').select('id', 'stock', 'stock_referencia', 'costo').orderBy('id'),
       platos: (await db('platos').count({ n: '*' }).first()).n,
       usuarios: (await db('usuarios').count({ n: '*' }).first()).n,
@@ -76,22 +80,33 @@ describe('Fase 3 · B1 reiniciar reportes', () => {
       metodos: (await db('metodos_pago').count({ n: '*' }).first()).n,
     };
     const r = await send(admin, 'post', '/api/admin/reiniciar-reportes', { confirmar: 'BORRAR' }).expect(200);
-    expect(r.body).toMatchObject({ ok: true, pedidos: expect.any(Number), compras: expect.any(Number), bitacora: expect.any(Number) });
+    expect(r.body).toMatchObject({ ok: true, pedidos: cerrados.length, compras: expect.any(Number), bitacora: expect.any(Number) });
     expect(r.body.pedidos).toBeGreaterThan(0);
-    for (const t of ['pedidos', 'pedido_items', 'pedido_item_extras', 'compras']) {
-      expect((await db(t).count({ n: '*' }).first()).n, t).toBe(0);
-    }
-    const log = await db('bitacora');
-    expect(log).toHaveLength(1);
-    expect(log[0].accion).toBe('Reinició los reportes');
-    expect(log[0].usuario).toBe('admin');
+    expect(r.body.compras).toBeGreaterThan(0);
+    expect(r.body.bitacora).toBeGreaterThan(0);
+    for (const id of cerrados.map(p => p.id)) expect((await db('pedidos').where({ id }).first()).archivado_en).toBeTruthy();
+    expect((await db('pedidos').where({ id: vivo.id }).first()).archivado_en).toBeNull();
+    expect((await db('pedidos').count({ n: '*' }).first()).n).toBe(antes.pedidos);
+    expect((await db('pedido_items').count({ n: '*' }).first()).n).toBeGreaterThan(0);
+    expect((await db('compras').whereNotNull('archivado_en').count({ n: '*' }).first()).n).toBeGreaterThan(0);
+    const log = await db('bitacora').orderBy('id');
+    expect(log.filter(b => !b.archivado_en)).toHaveLength(1);
+    expect(log[log.length - 1]).toMatchObject({ accion: 'Reinició los reportes', usuario: 'admin', archivado_en: null });
+    expect(log.filter(b => b.archivado_en).length).toBeGreaterThan(0);
     expect(await db('insumos').select('id', 'stock', 'stock_referencia', 'costo').orderBy('id')).toEqual(antes.insumos);
     expect((await db('platos').count({ n: '*' }).first()).n).toBe(antes.platos);
     expect((await db('usuarios').count({ n: '*' }).first()).n).toBe(antes.usuarios);
     expect((await db('config').where({ clave: 'general' }).first()).valor).toEqual(antes.config);
     expect((await db('metodos_pago').count({ n: '*' }).first()).n).toBe(antes.metodos);
+    const ids = cerrados.map(p => p.id);
+    const facturas = await admin.get('/api/facturas').expect(200);
+    expect(facturas.body.facturas.map(f => f.id)).not.toEqual(expect.arrayContaining(ids));
+    const incluidas = await admin.get('/api/facturas?archivados=incluir').expect(200);
+    expect(incluidas.body.facturas.map(f => f.id)).toEqual(expect.arrayContaining(ids));
     const rep = (await admin.get('/api/reportes/ventas').expect(200)).body;
-    expect(rep).toMatchObject({ total: 0, pedidos: 0, compras: 0 });
-    expect((await admin.get('/api/facturas')).body.total).toBe(0);
+    expect(rep).toMatchObject({ pedidos: 1, total: Number(vivo.total) });
+    expect(Number(rep.compras)).toBe(0);
+    const todo = (await admin.get('/api/reportes/ventas?archivados=incluir').expect(200)).body;
+    expect(Number(todo.compras)).toBeGreaterThan(0);
   });
 });

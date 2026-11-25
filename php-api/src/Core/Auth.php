@@ -15,7 +15,7 @@ final class Auth
         if ($req->userCargado) return $req->user;
         $id = Sesion::get('userId');
         $u = $id ? Usuarios::porId((int) $id) : null;
-        if ($id && (!$u || !(int) $u['activo'])) { Sesion::destruir(); $u = null; }
+        if ($id && (!$u || !(int) $u['activo'] || !empty($u['eliminado_en']))) { Sesion::destruir(); $u = null; }
         $req->user = $u;
         $req->userCargado = true;
         return $u;

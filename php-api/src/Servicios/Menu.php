@@ -5,16 +5,18 @@ namespace Alci\Servicios;
 
 use Alci\Core\Db;
 use Alci\Core\Fmt;
+use Alci\Servicios\Archivo;
 
 /** Igual que services/menu.js. */
 final class Menu
 {
     /** Platos con todo su detalle (filas internas: incluyen insumoId, multiplicador, unidadInsumo…). */
-    public static function cargarPlatos(bool $soloActivos = false, ?array $ids = null): array
+    public static function cargarPlatos(bool $soloActivos = false, ?array $ids = null, bool $soloEliminados = false): array
     {
-        $sql = 'SELECT p.id, p.nombre, p.emoji, p.imagen_url, p.activo, p.orden, c.nombre AS categoria
+        $sql = 'SELECT p.id, p.nombre, p.emoji, p.imagen_url, p.activo, p.orden, p.eliminado_en, c.nombre AS categoria
             FROM platos p JOIN categorias c ON c.id = p.categoria_id WHERE 1=1';
         $p = [];
+        $sql .= $soloEliminados ? ' AND p.eliminado_en IS NOT NULL' : ' AND p.eliminado_en IS NULL';
         if ($soloActivos) $sql .= ' AND p.activo = 1';
         if ($ids !== null) {
             if (!$ids) return [];
@@ -28,11 +30,13 @@ final class Menu
 
         $variantes = Db::todos("SELECT * FROM plato_variantes WHERE plato_id IN ($in) ORDER BY orden, id", $pid);
         $ingredientes = Db::todos("SELECT pi.plato_id, pi.insumo_id, pi.cantidad, pi.unidad, i.nombre, i.unidad AS unidadInsumo
-            FROM plato_ingredientes pi JOIN insumos i ON i.id = pi.insumo_id WHERE pi.plato_id IN ($in) ORDER BY i.id", $pid);
+            FROM plato_ingredientes pi JOIN insumos i ON i.id = pi.insumo_id
+            WHERE i.eliminado_en IS NULL AND pi.plato_id IN ($in) ORDER BY i.id", $pid);
         $salsas = Db::todos("SELECT ps.plato_id, ps.insumo_id, i.nombre
-            FROM plato_salsas ps JOIN insumos i ON i.id = ps.insumo_id WHERE ps.plato_id IN ($in) ORDER BY i.id", $pid);
+            FROM plato_salsas ps JOIN insumos i ON i.id = ps.insumo_id
+            WHERE i.eliminado_en IS NULL AND ps.plato_id IN ($in) ORDER BY i.id", $pid);
         $extras = Db::todos("SELECT pe.plato_id, e.* FROM plato_extras pe JOIN extras e ON e.id = pe.extra_id
-            WHERE pe.plato_id IN ($in) ORDER BY e.id", $pid);
+            WHERE e.eliminado_en IS NULL AND pe.plato_id IN ($in) ORDER BY e.id", $pid);
 
         $de = fn(array $filas, int $id) => array_values(array_filter($filas, fn($f) => (int) $f['plato_id'] === $id));
         return array_map(function ($p) use ($variantes, $ingredientes, $salsas, $extras, $de) {
@@ -40,6 +44,7 @@ final class Menu
             return [
                 'id' => $id, 'nombre' => $p['nombre'], 'emoji' => $p['emoji'], 'imagen_url' => $p['imagen_url'],
                 'activo' => (bool) (int) $p['activo'], 'orden' => (int) $p['orden'], 'categoria' => $p['categoria'],
+                'eliminado_en' => $p['eliminado_en'],
                 'variantes' => array_map(fn($v) => [
                     'id' => (int) $v['id'], 'nombre' => $v['nombre'], 'precio' => Fmt::num($v['precio']),
                     'multiplicador' => Fmt::num($v['multiplicador']),
@@ -56,12 +61,13 @@ final class Menu
 
     public static function extraCompleto(array $e): array
     {
-        return [
+        $r = [
             'id' => (int) $e['id'], 'nombre' => $e['nombre'],
             'insumoId' => isset($e['insumo_id']) ? (int) $e['insumo_id'] : null,
             'cantidad' => Fmt::num($e['cantidad'] ?? null), 'unidad' => $e['unidad'] ?? null,
             'precio' => Fmt::num($e['precio']), 'grupo' => ($e['grupo'] ?? '') ?: null,
         ];
+        return Archivo::marcar($r, $e);
     }
 
     private static function extraCorto(array $e): array
@@ -102,7 +108,7 @@ final class Menu
     /** Plato completo para administración. */
     public static function admin(array $p): array
     {
-        return [
+        $r = [
             'id' => $p['id'], 'nombre' => $p['nombre'], 'emoji' => $p['emoji'] ?? null, 'imagenUrl' => $p['imagen_url'] ?: null,
             'categoria' => $p['categoria'], 'activo' => $p['activo'], 'orden' => $p['orden'],
             'variantes' => $p['variantes'],
@@ -112,5 +118,6 @@ final class Menu
             'salsas' => $p['salsas'],
             'extras' => array_map([self::class, 'extraCorto'], $p['extras']),
         ];
+        return Archivo::marcar($r, $p);
     }
 }

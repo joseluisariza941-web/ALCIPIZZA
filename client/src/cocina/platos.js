@@ -1,7 +1,7 @@
 // Lógica pura de Comidas (platos) y Extras.
 import { isBebida } from './util.js';
+import { unidadesCompatibles } from './unidades.js';
 
-const esUnd = u => u === 'und';
 const porNombre = (insumos, n) => insumos.find(x => x.nombre.trim().toLowerCase() === String(n).trim().toLowerCase());
 
 /** Ids de los extras ofrecidos por un plato (acepta objetos Extra o ids). */
@@ -52,7 +52,7 @@ export function validarPlato(f, insumos) {
   for (const g of ing) {
     const x = porNombre(insumos, g.insumo);
     if (!x) return { error: `El insumo "${g.insumo.trim()}" no existe: ingrésalo primero en Inventario` };
-    if (esUnd(g.unidad) !== esUnd(x.unidad)) return { error: `"${x.nombre}" se mide en ${x.unidad}: usa el mismo tipo de unidad` };
+    if (!unidadesCompatibles(g.unidad, x.unidad)) return { error: `"${x.nombre}" se mide en ${x.unidad}: usa el mismo tipo de unidad` };
     ingredientes.push({ insumoId: x.id, cantidad: +g.cantidad, unidad: g.unidad });
   }
   return { body: { nombre, emoji: f.emoji || '🍽️', categoria, imagenUrl: f.imagenUrl || '', variantes, ingredientes,
@@ -79,6 +79,6 @@ export function validarExtra(f, insumos) {
   if (!nombre || !(cantidad > 0) || !(precio >= 0) || f.precio === '') return { error: 'Completa nombre, cantidad y precio' };
   const x = porNombre(insumos, f.insumo);
   if (!x) return { error: 'Ese insumo no existe: ingrésalo primero en Inventario' };
-  if (esUnd(f.unidad) !== esUnd(x.unidad)) return { error: `Usa el mismo tipo de unidad que el inventario (${x.unidad})` };
+  if (!unidadesCompatibles(f.unidad, x.unidad)) return { error: `Usa el mismo tipo de unidad que el inventario (${x.unidad})` };
   return { body: { nombre, insumoId: x.id, cantidad, unidad: f.unidad, precio, grupo: String(f.grupo || '').trim() || null } };
 }

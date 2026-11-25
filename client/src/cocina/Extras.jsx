@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { UNIDADES } from './util.js';
+import SelectUnidad from './SelectUnidad.jsx';
+import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 import { idsExtras, platoABody, validarExtra } from './platos.js';
 import { toast, toastError } from './toast.js';
 
@@ -22,7 +23,7 @@ function FilaExtra({ x, insumos, platos, onCambio, onPlato }) {
     onCambio();
   }
   async function borrar() {
-    if (!confirm('¿Eliminar este extra?')) return;
+    if (!confirm(textoOcultar('este extra'))) return;
     try { await api.del(`/api/admin/extras/${x.id}`); } catch (e) { toastError(e); }
     onCambio();
   }
@@ -34,9 +35,7 @@ function FilaExtra({ x, insumos, platos, onCambio, onPlato }) {
         <td><input list="il2" value={f.insumo} aria-label="Insumo" onChange={set('insumo')} onBlur={() => guardar()} /></td>
         <td><input type="number" step="any" value={f.cantidad} style={{ width: '6rem' }} aria-label="Cantidad" onChange={set('cantidad')} onBlur={() => guardar()} /></td>
         <td>
-          <select aria-label="Unidad" value={f.unidad} onChange={e => { const nf = { ...f, unidad: e.target.value }; setF(nf); guardar(nf); }}>
-            {UNIDADES.map(u => <option key={u}>{u}</option>)}
-          </select>
+          <SelectUnidad value={f.unidad} onChange={e => { const nf = { ...f, unidad: e.target.value }; setF(nf); guardar(nf); }} />
         </td>
         <td><input type="number" value={f.precio} style={{ width: '7rem' }} aria-label="Precio" onChange={set('precio')} onBlur={() => guardar()} /></td>
         <td><input value={f.grupo} placeholder="(opcional)" style={{ width: '7rem' }} aria-label="Grupo" onChange={set('grupo')} onBlur={() => guardar()} /></td>
@@ -108,6 +107,7 @@ export default function Extras({ extras, platos, insumos, recargar }) {
           </tbody>
         </table>
       </div>
+      <FiltroEliminados ruta="/api/admin/extras" nombre={x => x.nombre} version={extras} onRestaurado={recargar} />
       <div className="card" style={{ marginTop: '1rem' }}>
         <h3>Nuevo extra</h3>
         <label>¿En qué platos se ofrece?</label>
@@ -122,7 +122,7 @@ export default function Extras({ extras, platos, insumos, recargar }) {
           <input placeholder="Nombre (ej: Queso extra)" value={f.nombre} onChange={set('nombre')} />
           <input list="il2" placeholder="Insumo que descuenta" value={f.insumo} onChange={set('insumo')} />
           <input type="number" step="any" placeholder="Cantidad" value={f.cantidad} onChange={set('cantidad')} />
-          <select aria-label="Unidad" value={f.unidad} onChange={set('unidad')}>{UNIDADES.map(u => <option key={u}>{u}</option>)}</select>
+          <SelectUnidad value={f.unidad} onChange={set('unidad')} />
           <input type="number" placeholder="Precio" value={f.precio} onChange={set('precio')} />
           <input placeholder="Grupo (opcional)" value={f.grupo} onChange={set('grupo')} />
           <button className="btn" onClick={agregar}>Agregar extra</button>

@@ -11,6 +11,7 @@ use Alci\Core\V;
 final class Promociones
 {
     private const SELECT = 'SELECT pr.*, c.nombre AS categoria_nombre FROM promociones pr LEFT JOIN categorias c ON c.id = pr.categoria_id';
+    private const VIGENTES = 'pr.eliminado_en IS NULL';
 
     public static function etiqueta(array $p): string
     {
@@ -57,13 +58,14 @@ final class Promociones
         ];
         $p['vigente'] = self::vigente($p);
         $p['etiqueta'] = self::etiqueta($p);
-        return $p;
+        return Archivo::marcar($p, $f);
     }
 
     /** @return list<array> todas, en formato de la API. */
-    public static function todas(): array
+    public static function todas(bool $soloEliminados = false): array
     {
-        return array_map([self::class, 'aApi'], Db::todos(self::SELECT . ' ORDER BY pr.id DESC'));
+        $where = $soloEliminados ? 'pr.eliminado_en IS NOT NULL' : self::VIGENTES;
+        return array_map([self::class, 'aApi'], Db::todos(self::SELECT . " WHERE $where ORDER BY pr.id DESC"));
     }
 
     public static function vigentes(): array
@@ -71,9 +73,10 @@ final class Promociones
         return array_values(array_filter(self::todas(), fn($p) => $p['vigente']));
     }
 
-    public static function una(int $id): ?array
+    public static function una(int $id, bool $incluirEliminados = false): ?array
     {
-        $f = Db::uno(self::SELECT . ' WHERE pr.id = ?', [$id]);
+        $where = 'pr.id = ?' . ($incluirEliminados ? '' : ' AND ' . self::VIGENTES);
+        $f = Db::uno(self::SELECT . " WHERE $where", [$id]);
         return $f ? self::aApi($f) : null;
     }
 
@@ -140,7 +143,7 @@ final class Promociones
             'plato_id' => null, 'categoria_id' => null, 'monto_minimo' => null];
         if ($alcance === 'plato') {
             $pid = $d['platoId'] ?? null;
-            if (!is_int($pid) || Db::valor('SELECT id FROM platos WHERE id = ?', [$pid]) === null) V::fallo('Elige un plato válido', 'platoId');
+            if (!is_int($pid) || Db::valor('SELECT id FROM platos WHERE id = ? AND eliminado_en IS NULL', [$pid]) === null) V::fallo('Elige un plato válido', 'platoId');
             $fila['plato_id'] = $pid;
         } elseif ($alcance === 'categoria') {
             $cat = $d['categoria'] ?? null;

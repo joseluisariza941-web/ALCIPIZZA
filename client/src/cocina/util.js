@@ -13,7 +13,6 @@ export const nivel = x => (Number(x.stockReferencia) > 0 ? Number(x.stock) / Num
 export const stockBajo = x => nivel(x) < 0.2;
 export const fmtStock = s => +(+s).toFixed(2);
 
-export const UNIDADES = ['g', 'kg', 'lb', 'und'];
 export const DN = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 /** La API guarda horarios de lunes (0) a domingo (6). */
 export const diaApi = i => DN[(i + 1) % 7];

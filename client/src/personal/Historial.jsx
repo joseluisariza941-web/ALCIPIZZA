@@ -1,6 +1,7 @@
 // Historial de la mesera, cobro y tirilla (hist(), card(), cobrar() y recibo() de la app original).
 import { DetalleItem, Modal, WaIcon } from './componentes.jsx';
 import { fechaHora, pesos } from './formato.js';
+import EtiquetasPedido from './EtiquetasPedido.jsx';
 import { historial } from './pedidos.js';
 import { waLink } from './whatsapp.js';
 
@@ -18,6 +19,7 @@ export function PedidoCard({ o, onCobrar, onEditar, onEntregado, onTirilla }) {
       <p><b>{o.destino}</b>{o.cliente ? ' · ' + o.cliente : ''} · {pesos(o.total)}</p>
       <p className="sm">{o.items.map(c => c.nombre + ' (' + c.variante + ')').join(', ')}</p>
       <p className="sm">{o.telefono ? '📞 ' + o.telefono + ' · ' : ''}{web ? 'Estado: ' + o.estado + (mp ? ' · pagará: ' + mp : '') : ''}</p>
+      <EtiquetasPedido o={o} />
       <div className="row" style={{ marginTop: '.7rem' }}>
         {o.pagoEstado === 'pagado'
           ? <span className="bd">Pagado ✓ {mp}</span>
@@ -51,22 +53,6 @@ export function Historial({ pedidos, meseraId, ...acc }) {
         {mios.length ? mios.map(o => <PedidoCard key={o.id} o={o} {...acc} />) : <div className="card">Aún no has enviado pedidos.</div>}
       </div>
     </>
-  );
-}
-
-/** @param {{ o:any, pagos:{codigo:string, nombre:string}[], onPagar:(codigo:string)=>void, onCerrar:()=>void }} p */
-export function Cobrar({ o, pagos, onPagar, onCerrar }) {
-  return (
-    <Modal etiqueta={'Cobrar pedido #' + o.id}>
-      <div className="card" style={{ maxWidth: 360, width: '92%' }}>
-        <h2>Pedido #{o.id}</h2>
-        <p className="sm" style={{ margin: '.5rem 0' }}>Total {pesos(o.total)} · ¿Cómo pagó?</p>
-        <div className="row">
-          {pagos.map(x => <button key={x.codigo} className="btn y" onClick={() => onPagar(x.codigo)}>{x.nombre}</button>)}
-        </div>
-        <button className="btn s" style={{ marginTop: '1rem' }} onClick={onCerrar}>Cancelar</button>
-      </div>
-    </Modal>
   );
 }
 
