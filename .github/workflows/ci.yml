@@ -1,0 +1,159 @@
+name: CI
+
+on: [push, pull_request]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Pruebas (API + React + build)
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3310'
+      DB_USER: alcipizza
+      DB_PASSWORD: Alcipizza_Dev_2026
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root_Alcipizza_2026
+          MYSQL_DATABASE: alcipizza_test
+          MYSQL_USER: alcipizza
+          MYSQL_PASSWORD: Alcipizza_Dev_2026
+          TZ: America/Bogota
+        ports:
+          - '3310:3306'
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot_Alcipizza_2026"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=10s
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring, openssl
+          coverage: none
+
+      - name: Preparar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Crear bases de pruebas
+        env:
+          MYSQL_PWD: root_Alcipizza_2026
+        run: |
+          mysql --protocol=TCP -h "$DB_HOST" -P "$DB_PORT" -u root -e "CREATE DATABASE IF NOT EXISTS alcipizza_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE DATABASE IF NOT EXISTS alcipizza_test_d CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT ALL PRIVILEGES ON alcipizza_test.* TO 'alcipizza'@'%'; GRANT ALL PRIVILEGES ON alcipizza_test_d.* TO 'alcipizza'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Instalar dependencias del servidor
+        working-directory: server
+        run: npm ci
+
+      - name: Instalar dependencias del cliente
+        working-directory: client
+        run: npm ci
+
+      - name: Pruebas de la API
+        working-directory: server
+        run: npm test
+
+      - name: Pruebas de React
+        working-directory: client
+        run: npm test
+
+      - name: Build del cliente
+        working-directory: client
+        run: npm run build
+
+  e2e:
+    name: E2E (Playwright + Chromium)
+    needs: pruebas
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3310'
+      DB_USER: alcipizza
+      DB_PASSWORD: Alcipizza_Dev_2026
+      ALCI_E2E_DB: alcipizza_test_d
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root_Alcipizza_2026
+          MYSQL_DATABASE: alcipizza_test
+          MYSQL_USER: alcipizza
+          MYSQL_PASSWORD: Alcipizza_Dev_2026
+          TZ: America/Bogota
+        ports:
+          - '3310:3306'
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot_Alcipizza_2026"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=10s
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring, openssl
+          coverage: none
+
+      - name: Preparar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Crear bases de pruebas
+        env:
+          MYSQL_PWD: root_Alcipizza_2026
+        run: |
+          mysql --protocol=TCP -h "$DB_HOST" -P "$DB_PORT" -u root -e "CREATE DATABASE IF NOT EXISTS alcipizza_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; CREATE DATABASE IF NOT EXISTS alcipizza_test_d CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT ALL PRIVILEGES ON alcipizza_test.* TO 'alcipizza'@'%'; GRANT ALL PRIVILEGES ON alcipizza_test_d.* TO 'alcipizza'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Instalar dependencias del servidor
+        working-directory: server
+        run: npm ci
+
+      - name: Instalar dependencias del cliente
+        working-directory: client
+        run: npm ci
+
+      - name: Instalar Chromium
+        working-directory: client
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas E2E
+        working-directory: client
+        run: npm run e2e
+
+      - name: Subir informe de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            client/playwright-report
+            client/test-results
+          if-no-files-found: warn
+          retention-days: 7

@@ -219,7 +219,7 @@ describe('Fase 2 · ajustes', () => {
     const res = await admin.get('/api/metodos-pago').expect(200);
     expect(res.body).toHaveLength(5);
     const ed = await send(admin, 'put', '/api/metodos-pago/nq', { nombre: 'Nequi', numero: '3001112233', activo: false }).expect(200);
-    expect(ed.body).toEqual({ codigo: 'nq', nombre: 'Nequi', numero: '3001112233', activo: false });
+    expect(ed.body).toEqual({ codigo: 'nq', nombre: 'Nequi', numero: '3001112233', activo: false, qrUrl: null });
     const pub = (await request(app).get('/api/public/config')).body.pagos.map(p => p.codigo);
     expect(pub).not.toContain('nq');
     await send(admin, 'put', '/api/metodos-pago/zz', { nombre: 'Z', numero: '', activo: true }).expect(404);
@@ -228,7 +228,7 @@ describe('Fase 2 · ajustes', () => {
 
   it('crea y borra métodos de pago (si ya se usó, solo se desactiva)', async () => {
     const nuevo = await send(admin, 'post', '/api/metodos-pago', { nombre: 'Movii', numero: '3110000000', activo: true }).expect(201);
-    expect(nuevo.body).toEqual({ codigo: expect.stringMatching(/^[a-z0-9]{1,10}$/), nombre: 'Movii', numero: '3110000000', activo: true });
+    expect(nuevo.body).toEqual({ codigo: expect.stringMatching(/^[a-z0-9]{1,10}$/), nombre: 'Movii', numero: '3110000000', activo: true, qrUrl: null });
     await send(admin, 'post', '/api/metodos-pago', { nombre: 'movii' }).expect(409);
     await send(admin, 'post', '/api/metodos-pago', { nombre: '' }).expect(400);
     await send(ana, 'post', '/api/metodos-pago', { nombre: 'Otro' }).expect(403);

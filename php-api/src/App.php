@@ -10,7 +10,8 @@ final class App
 {
     /** Módulos de rutas, en el mismo orden que app.js (la primera coincidencia gana). */
     private const MODULOS = [
-        Rutas\Auth::class, Rutas\Bitacora::class, Rutas\Publico::class, Rutas\Pedidos::class,
+        Rutas\Auth::class, Rutas\Bitacora::class, Rutas\Publico::class, Rutas\Pedidos::class, Rutas\Admin::class,
+        Rutas\Promociones::class, Rutas\Puntos::class,
         Rutas\Catalogo::class, Rutas\Inventario::class, Rutas\Ajustes::class, Rutas\Usuarios::class,
     ];
 

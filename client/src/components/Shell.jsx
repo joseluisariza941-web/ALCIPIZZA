@@ -9,6 +9,7 @@ import { ConfigContext, logoDe, useCargarConfig } from './ConfigContext.jsx';
 import { ToastHost } from './toast.jsx';
 import { Splash, splashInicial } from './splash.jsx';
 import IconoWhatsApp from './IconoWhatsApp.jsx';
+import { IconoFacebook, IconoUbicacion } from './IconosRedes.jsx';
 import { estaAbierto } from '../cliente/horario.js';
 
 const EMOJIS = ['🍔', '🍟', '🌭', '🍕', '🥤', '🌮', '🫓', '🥓', '🧀', '🍅', '🌶️', '🥬'];
@@ -118,7 +119,9 @@ function Pie({ c }) {
           <div><b>📍 Güepsa, Santander</b><br />{c.n} · {c.w2}</div>
           <div>
             <a className="btn y s" href={`tel:${c.tel}`}>📞 {c.tel}</a>{' '}
-            <a className="btn s wa" target="_blank" rel="noopener noreferrer" href={`https://wa.me/57${c.tel}`}><IconoWhatsApp /> {c.tel}</a>
+            <a className="btn s wa" target="_blank" rel="noopener noreferrer" href={`https://wa.me/57${c.tel}`}><IconoWhatsApp /> {c.tel}</a>{' '}
+            <a className="btn s" target="_blank" rel="noopener noreferrer" href="https://www.facebook.com/alcipi" aria-label="Facebook de Alcipizza"><IconoFacebook /> Facebook</a>{' '}
+            <a className="btn s" target="_blank" rel="noopener noreferrer" href="https://maps.app.goo.gl/RMeGi2dnmzTygJXh7" aria-label="Ver ubicación de Alcipizza en Google Maps"><IconoUbicacion /> Cl. 4, Guepsa, Güepsa, Santander</a>
           </div>
         </div>
         <div className="cp">© {new Date().getFullYear()} {c.n} · Software desarrollado por <b>ING. JOSÉ LUIS ARIZA</b> · Todos los derechos reservados</div>

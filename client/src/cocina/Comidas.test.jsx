@@ -1,7 +1,9 @@
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Comidas from './Comidas.jsx';
+import { useCarga } from './hooks.js';
 import { mockApi, renderWith } from '../test/helpers.jsx';
 import { extras, insumos, platos } from './fixtures.js';
 
@@ -13,6 +15,18 @@ const cuerpo = (f, metodo, url) => JSON.parse(llamada(f, metodo, url)[1].body);
 
 beforeEach(() => { vi.stubGlobal('confirm', vi.fn(() => true)); });
 afterEach(() => { document.querySelectorAll('.toast:not([role])').forEach(e => e.remove()); });
+
+describe('useCarga con StrictMode', () => {
+  it('guarda los datos aunque el efecto se monte dos veces', async () => {
+    mockApi({ 'GET /api/admin/platos': [{ id: 1, nombre: 'Pizza' }] });
+    function Datos() {
+      const { data } = useCarga('/api/admin/platos', []);
+      return <p>{data.length} platos cargados</p>;
+    }
+    renderWith(<StrictMode><Datos /></StrictMode>);
+    expect(await screen.findByText('1 platos cargados')).toBeInTheDocument();
+  });
+});
 
 describe('Comidas: platos y bebidas', () => {
   it('lista los platos con categoría, tamaños, ingredientes y salsas', async () => {
@@ -26,6 +40,12 @@ describe('Comidas: platos y bebidas', () => {
     expect(t.getByText('🥫 Ketchup')).toHaveClass('pl');
     const beb = screen.getByText('Gaseosa', { selector: 'b' }).closest('tr');
     expect(within(beb).getByText('📦 Gaseosa')).toBeInTheDocument();
+  });
+
+  it('muestra un plato con variantes, ingredientes y salsas nulos', async () => {
+    mockApi({ ...base, 'GET /api/admin/platos': [{ id: 99, nombre: 'Plato raro', categoria: 'Pizzas', variantes: null, ingredientes: null, salsas: null }] });
+    renderWith(<Comidas />);
+    expect(await screen.findByText('Plato raro', { selector: 'b' })).toBeInTheDocument();
   });
 
   it('elimina un plato tras confirmar', async () => {

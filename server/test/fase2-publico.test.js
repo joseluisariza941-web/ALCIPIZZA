@@ -23,7 +23,7 @@ describe('Fase 2 · config pública', () => {
     expect(res.body.abierto).toBe(true);
     expect(res.body.suscripcionActiva).toBe(true);
     expect(res.body.pagos.map(p => p.codigo)).not.toContain('dv');
-    expect(res.body.pagos[0]).toEqual({ codigo: 'ef', nombre: 'Efectivo', numero: null, activo: true });
+    expect(res.body.pagos[0]).toEqual({ codigo: 'ef', nombre: 'Efectivo', numero: null, activo: true, qrUrl: null });
     await db('metodos_pago').where({ codigo: 'dv' }).update({ activo: true });
   });
 
@@ -52,7 +52,7 @@ describe('Fase 2 · menú público', () => {
     const res = await request(app).get('/api/menu').expect(200);
     const burger = res.body.find(p => p.nombre === 'Hamburguesa');
     expect(burger).toMatchObject({ emoji: '🍔', categoria: 'Hamburguesas', imagenUrl: null });
-    expect(burger.variantes[0]).toEqual({ id: expect.any(Number), nombre: 'Sencilla', precio: 14000 });
+    expect(burger.variantes[0]).toEqual({ id: expect.any(Number), nombre: 'Sencilla', precio: 14000, precioPromo: null });
     expect(burger.ingredientes).toEqual(['Pan', 'Carne', 'Queso', 'Tomate', 'Lechuga']);
     expect(burger.salsas).toEqual(['Ketchup', 'Mayonesa', 'Mostaza']);
     expect(burger.extras).toContainEqual({ id: expect.any(Number), nombre: 'Papas pequeña', precio: 3000, grupo: 'papas' });

@@ -21,12 +21,12 @@ function Platos({ platos, onEditar, onBorrar }) {
                   {p.imagenUrl ? <img className="pim2" style={{ width: 44, height: 44, verticalAlign: 'middle' }} src={p.imagenUrl} alt="" /> : p.emoji}{' '}
                   <b>{p.nombre}</b> <span className="bd">{p.categoria}</span>
                   {p.activo === false && <> <span className="bd">Inactivo</span></>}
-                  <div className="pills">{p.variantes.map(v => <span key={v.id ?? v.nombre} className="pl">{v.nombre} {money(v.precio)}</span>)}</div>
+                  <div className="pills">{(p.variantes ?? []).map(v => <span key={v.id ?? v.nombre} className="pl">{v.nombre} {money(v.precio)}</span>)}</div>
                   {isBebida(p.categoria)
                     ? (p.ingredientes?.[0] && <div className="pills"><span className="pl ig2">📦 {p.ingredientes[0].nombre}</span></div>)
                     : <>
-                      <div className="pills">{(p.ingredientes || []).map(g => <span key={g.insumoId ?? g.nombre} className="pl ig2">{pillIngrediente(g)}</span>)}</div>
-                      <div className="pills">{(p.salsas || []).map(k => <span key={k} className="pl">🥫 {k}</span>)}</div>
+                      <div className="pills">{(p.ingredientes ?? []).map(g => <span key={g.insumoId ?? g.nombre} className="pl ig2">{pillIngrediente(g)}</span>)}</div>
+                      <div className="pills">{(p.salsas ?? []).map(k => <span key={k} className="pl">🥫 {k}</span>)}</div>
                     </>}
                 </td>
                 <td>

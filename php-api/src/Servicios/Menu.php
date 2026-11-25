@@ -70,12 +70,29 @@ final class Menu
     }
 
     /** Plato del menú público. */
-    public static function publico(array $p): array
+    public static function publico(array $p, array $promos = []): array
     {
+        // promoción por plato o categoría que más rebaja el primer tamaño (el total se anuncia en la config pública)
+        $mejor = null;
+        $ref = $p['variantes'][0]['precio'] ?? 0;
+        $fila = [['plato_id' => $p['id'], 'categoria' => $p['categoria'], 'precio_unitario' => $ref]];
+        $desc = 0;
+        foreach ($promos as $pr) {
+            if ($pr['alcance'] === 'total') continue;
+            $d = Promociones::descuentoDe($pr, $fila, $ref);
+            if ($d > $desc) { $desc = $d; $mejor = $pr; }
+        }
+        $precioPromo = function (array $v) use ($mejor) {
+            if (!$mejor) return null;
+            $fv = [['plato_id' => $mejor['platoId'], 'categoria' => $mejor['categoria'], 'precio_unitario' => $v['precio']]];
+            $fv[0] = ['plato_id' => $mejor['alcance'] === 'plato' ? $mejor['platoId'] : null, 'categoria' => $mejor['categoria']] + ['precio_unitario' => $v['precio']];
+            return $v['precio'] - Promociones::descuentoDe($mejor, $fv, $v['precio']);
+        };
         return [
             'id' => $p['id'], 'nombre' => $p['nombre'], 'emoji' => $p['emoji'] ?? null, 'imagenUrl' => $p['imagen_url'] ?: null,
             'categoria' => $p['categoria'],
-            'variantes' => array_map(fn($v) => ['id' => $v['id'], 'nombre' => $v['nombre'], 'precio' => $v['precio']], $p['variantes']),
+            'promocion' => $mejor ? ['id' => $mejor['id'], 'nombre' => $mejor['nombre'], 'etiqueta' => $mejor['etiqueta']] : null,
+            'variantes' => array_map(fn($v) => ['id' => $v['id'], 'nombre' => $v['nombre'], 'precio' => $v['precio'], 'precioPromo' => $precioPromo($v)], $p['variantes']),
             'ingredientes' => array_map(fn($i) => $i['nombre'], $p['ingredientes']),
             'salsas' => array_map(fn($s) => $s['nombre'], $p['salsas']),
             'extras' => array_map([self::class, 'extraCorto'], $p['extras']),

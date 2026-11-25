@@ -65,3 +65,49 @@ hPanel → Seguridad → **SSL** → instalar el certificado gratuito (Let's Enc
 ## Actualizar a una versión nueva
 1. `node php-api/scripts/build-deploy.mjs --no-sql` (o sin `--no-sql` si cambió el esquema; en ese caso aplica a mano solo los cambios nuevos, **no** reimportes `schema.sql` sobre la base con datos).
 2. Reemplaza `public_html/` (conserva tu `.htaccess` si lo cambiaste) y `alcipizza-api/src/`. No toques `alcipizza-api/.env`.
+
+## Despliegue automático con GitHub Actions
+
+Los workflows están en `.github/workflows/`:
+
+- `ci.yml`: corre en todo `push` y `pull_request`; prueba la API (Vitest contra MySQL), React, el build de Vite y después los E2E de Playwright con Chromium.
+- `deploy.yml`: corre cuando `CI` termina con éxito en `main`, o a mano desde Actions → **Deploy** → *Run workflow*. Si falta alguno de los secretos, escribe un aviso en el resumen del job y termina en verde sin desplegar.
+
+### Secretos
+
+Créalos en GitHub → Settings → Secrets and variables → Actions → **New repository secret**:
+
+| Secreto | Valor |
+|---|---|
+| `SSH_HOST` | IP o dominio del servidor de Hostinger. |
+| `SSH_PORT` | `65002` (el puerto SSH de Hostinger; el plan Premium incluye SSH). |
+| `SSH_USER` | Tu usuario de hosting, p. ej. `u123456789`. |
+| `SSH_KEY` | Contenido completo de la llave privada `alcipizza_deploy` (líneas `BEGIN`/`END` incluidas). |
+| `DEPLOY_PATH` | `domains/<dominio>` (ruta relativa a tu home; sin `~/` ni barra final). |
+| `SITE_URL` | `https://<dominio>` (sin barra final). |
+
+### Llave SSH
+
+Genera la llave en tu equipo, **sin passphrase** (el runner la usa sin intervención):
+
+```sh
+ssh-keygen -t ed25519 -C deploy-alcipizza -f alcipizza_deploy
+```
+
+- Privada (`alcipizza_deploy`): va en el secreto `SSH_KEY`. Nunca la subas al repo.
+- Pública (`alcipizza_deploy.pub`): se pega en hPanel → Avanzado → Acceso SSH → **Llaves SSH**.
+
+El workflow guarda la privada en `~/.ssh` con permisos `600` y registra la huella del host con `ssh-keyscan -p "$SSH_PORT" "$SSH_HOST"`.
+
+### Qué sube
+
+`node php-api/scripts/build-deploy.mjs --no-sql` genera `deploy/` con el build de React ya compilado (el workflow hace antes `npm ci` en `client/`). Luego:
+
+- `deploy/public_html/` → `$DEPLOY_PATH/public_html/` con `rsync -az --delete`: se sube el `.htaccess` del paquete (si lo habías cambiado a mano en el servidor, se reemplaza).
+- `deploy/alcipizza-api/` → `$DEPLOY_PATH/alcipizza-api/` con `--exclude .env`: **nunca** borra ni sobrescribe `alcipizza-api/.env`.
+- `deploy/alcipizza-api/src/` → `$DEPLOY_PATH/alcipizza-api/src/` con `--delete`: el borrado solo afecta a `src/`.
+- Al terminar comprueba `$SITE_URL/api/health` hasta 5 veces con 5 s entre intentos y falla si no devuelve `ok: true`.
+
+### Migraciones
+
+El despliegue automático usa `--no-sql` y no toca la base de datos. Cuando haya migraciones nuevas en `server/migrations/`, aplícalas **a mano** en la base de producción (con los permisos de tu usuario de hPanel). No reimportes `schema.sql` sobre una base con datos: solo aplica los cambios nuevos, como se indica en «Actualizar a una versión nueva».

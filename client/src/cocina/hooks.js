@@ -13,7 +13,10 @@ export function useCarga(path, inicial) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(/** @type {Error|null} */ (null));
   const vivo = useRef(true);
-  useEffect(() => () => { vivo.current = false; }, []);
+  useEffect(() => {
+    vivo.current = true;
+    return () => { vivo.current = false; };
+  }, []);
   const recargar = useCallback(async () => {
     if (!path) return;
     try {

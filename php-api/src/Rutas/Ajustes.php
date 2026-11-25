@@ -22,12 +22,32 @@ final class Ajustes
                 largo: [7, 'Debe haber horario para los 7 días (lunes a domingo)'])),
             'logo' => Z::opcional(Z::texto(max: [3_000_000, null])), // URL o imagen en data URL
             'bg' => Z::opcional(Z::texto(max: [3_000_000, null])),
+            'sonido' => Z::opcional(Z::enumeracion(Config::SONIDOS, 'Sonido no válido (' . implode(', ', Config::SONIDOS) . ')')),
+            'domiciliosActivos' => Z::opcional(Z::booleano()),
+            'puntosActivos' => Z::opcional(Z::booleano()),
+            'puntosPorMil' => Z::opcional(Z::numero(entero: true, min: [0, 'Puntos por cada $1.000 no válidos'], max: [1000, null])),
+            'puntosCanje' => Z::opcional(Z::numero(entero: true, min: [1, 'Puntos por canje no válidos'], max: [100000, null])),
+            'descuentoCanje' => Z::opcional(Z::numero(entero: true, min: [0, 'Descuento por canje no válido'], max: [10000000, null])),
         ], estricto: true);
     }
+
+    /** Imagen del QR: URL https o data URL png/jpeg/webp/gif (máximo 700.000 caracteres, lo valida el esquema). */
+    private static function revisarQr(?string $qr): ?string
+    {
+        if ($qr === null || $qr === '') return null;
+        if (!preg_match('#^(https://\S+|data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*)$#', $qr)) {
+            throw new HttpError(400, 'La imagen del QR no es válida (usa PNG, JPG, WEBP o GIF)', 'VALIDACION',
+                [['path' => ['qrUrl'], 'message' => 'La imagen del QR no es válida']]);
+        }
+        return $qr;
+    }
+
+    private static function qrSchema(): \Closure { return Z::opcional(Z::nulable(Z::texto(trim: true, max: [700_000, null]))); }
 
     private static function metodoSchema(): \Closure
     {
         return Z::objeto([
+            'qrUrl' => self::qrSchema(),
             'nombre' => Z::opcional(Z::texto(trim: true, min: [1, 'Escribe el nombre'], max: [60, null])),
             'numero' => Z::opcional(Z::nulable(Z::texto(trim: true, max: [60, null]))),
             'activo' => Z::opcional(Z::booleano()),
@@ -37,6 +57,7 @@ final class Ajustes
     private static function metodoNuevoSchema(): \Closure
     {
         return Z::objeto([
+            'qrUrl' => self::qrSchema(),
             'nombre' => Z::texto('Escribe el nombre', trim: true, min: [1, 'Escribe el nombre'], max: [60, null]),
             'numero' => Z::opcional(Z::nulable(Z::texto(trim: true, max: [60, null]))),
             'activo' => Z::porDefecto(Z::booleano(), true),
@@ -98,7 +119,7 @@ final class Ajustes
             $orden = Db::valor('SELECT MAX(orden) FROM metodos_pago');
             Db::insertar('metodos_pago', [
                 'codigo' => $codigo, 'nombre' => $b['nombre'], 'numero' => ($b['numero'] ?? '') === '' ? null : $b['numero'],
-                'activo' => (int) $b['activo'], 'orden' => ($orden === null ? -1 : (int) $orden) + 1,
+                'qr_url' => self::revisarQr($b['qrUrl'] ?? null), 'activo' => (int) $b['activo'], 'orden' => ($orden === null ? -1 : (int) $orden) + 1,
             ]);
             Bitacora::registrar($req, "Creó el método de pago {$b['nombre']}");
             return Respuesta::con(201, Config::aMetodo(self::metodo($codigo)));
@@ -125,6 +146,7 @@ final class Ajustes
             $fila = [];
             if (array_key_exists('nombre', $b)) $fila['nombre'] = $b['nombre'];
             if (array_key_exists('numero', $b)) $fila['numero'] = ($b['numero'] ?? '') === '' ? null : $b['numero'];
+            if (array_key_exists('qrUrl', $b)) $fila['qr_url'] = self::revisarQr($b['qrUrl']);
             if (array_key_exists('activo', $b)) $fila['activo'] = (int) $b['activo'];
             if ($fila) Db::actualizar('metodos_pago', $fila, 'codigo = ?', [$codigo]);
             $m = Config::aMetodo(self::metodo($codigo));

@@ -62,12 +62,12 @@ describe('TirillaPage', () => {
     await waitFor(() => expect(screen.getAllByText('Solo puedes ver tu propia tirilla')).toHaveLength(2));
   });
 
-  it('ofrece el enlace de WhatsApp con el pedido', async () => {
+  it('no ofrece el envío por WhatsApp ni la opción de ocultar la tirilla', async () => {
     montar('/tirilla/7?token=abc');
     const r = await rc();
-    const a = await r.findByRole('link', { name: /Enviar al WhatsApp/ });
-    expect(a.getAttribute('href')).toMatch(/^https:\/\/wa\.me\/573001112233\?text=/);
-    expect(decodeURIComponent(a.getAttribute('href'))).toContain('*Pizzería Test* · Pedido #7');
+    expect(r.queryByRole('link', { name: /Enviar al WhatsApp/ })).not.toBeInTheDocument();
+    expect(r.queryByRole('button', { name: /Ocultar/ })).not.toBeInTheDocument();
+    expect(r.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument();
   });
 
   it('descarga la tirilla en PDF', async () => {

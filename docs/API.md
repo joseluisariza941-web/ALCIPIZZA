@@ -1,7 +1,7 @@
 # Contrato de la API · Alcipizza v2
 
 Fuente única de verdad entre `php-api/` (PHP + MySQL/MariaDB) y `client/` (React).
-Solo el agente de **backend** puede modificar este archivo; si un agente de frontend necesita un cambio, lo pide en su reporte final.
+Este archivo es el contrato entre la API y el frontend: toda ruta nueva o cambiada se documenta aquí antes de usarla.
 
 ## Convenciones
 
@@ -19,9 +19,14 @@ Solo el agente de **backend** puede modificar este archivo; si un agente de fron
 
 ```ts
 Usuario   = { id, usuario, nombre, rol: 'dev'|'cocina'|'mesera', activo, debeCambiarClave }
-Variante  = { id, nombre, precio }                                // admin además trae multiplicador
+Variante  = { id, nombre, precio, precioPromo: number|null /* solo en /api/menu: precio con la mejor promocion de plato o categoria */ } // admin además trae multiplicador y no trae precioPromo
 Extra     = { id, nombre, precio, grupo: string|null }            // mismo grupo = excluyentes
-Plato     = { id, nombre, emoji, imagenUrl, categoria, variantes: Variante[],
+Promocion = { id, nombre, tipo: 'porcentaje'|'monto', alcance: 'plato'|'categoria'|'total', platoId: number|null,
+              categoria: string|null /* nombre */, valor, montoMinimo: number|null /* solo alcance total */,
+              inicio, fin /* 'AAAA-MM-DD' */, dias: number[]|null /* 0 lunes..6 domingo; null = todos */,
+              horaDesde, horaHasta /* 'HH:MM' o null; si horaDesde > horaHasta cruza la medianoche */,
+              activa, vigente /* calculado ahora, hora de Bogota */, etiqueta /* '10% de descuento', '$2.000 de descuento', '5% de descuento desde $50.000' */ }
+Plato     = { id, nombre, emoji, imagenUrl, categoria, promocion: {id, nombre, etiqueta}|null, variantes: Variante[],
               ingredientes: string[], salsas: string[], extras: Extra[] }
 ItemPedido= { id, platoId, varianteId: number|null, nombre, emoji, variante, precioUnitario, nota,
               extras: {id, nombre, precio}[], salsas: string[], sin: string[] }
@@ -29,15 +34,20 @@ ItemPedido= { id, platoId, varianteId: number|null, nombre, emoji, variante, pre
               // varianteId es null solo si esa variante se borró después
               // para editar: items.map(i => ({ platoId, varianteId, extras: i.extras.map(e => e.id), salsas, sin, nota }))
 Pedido    = { id, creadoEn, origen: 'web'|'mesera', mesera: {id, nombre}|null, destino, cliente,
-              direccion, telefono, total, estado: 'nuevo'|'preparando'|'listo'|'entregado'|'cancelado',
+              direccion, telefono, celular: string|null /* 10 digitos */,
+              subtotal /* suma de items antes de descuentos */, descuentoPromo, promocion: {id, nombre}|null,
+              puntosCanjeados, descuentoPuntos, puntosGanados, editadoEn: string|null, canceladoPorCliente: boolean,
+              total /* = subtotal - descuentoPromo - descuentoPuntos */, estado: 'nuevo'|'preparando'|'listo'|'entregado'|'cancelado',
               pagoEstado: 'pendiente'|'pagado', metodoPago: {codigo, nombre}|null, pagadoEn,
               cobradoPor: {id, nombre}|null, items: ItemPedido[] }
 Insumo    = { id, nombre, tipo: 'insumo'|'salsa', unidad, stock, stockReferencia, costo, surtidorId: number|null,
               ultimaCompra: { fecha, cantidad, unidad, usuario /* nombre de quien la registró */ } | null }
 Surtidor  = { id, nombre, empresa, correo, telefono }
 Compra    = { id, fecha, insumo: {id, nombre}, cantidad, unidad, costo, surtidor: {id, nombre}|null, registradoPor: {id, nombre}|null }
-Config    = { n, w1, w2, w3, w4, tel, mesas, h: ([abre, cierra]|null)[7] /* lunes..domingo */, logo, bg }
-MetodoPago= { codigo, nombre, numero, activo }
+Config    = { n, w1, w2, w3, w4, tel, mesas, h: ([abre, cierra]|null)[7] /* lunes..domingo */, logo, bg,
+              sonido?: 'campana'|'timbre'|'pulso'|'arpegio'|'alarma' /* sin valor = 'campana' */,
+              domiciliosActivos?: boolean /* sin valor = true */, ...ajustes de puntos (ver Puntos) }
+MetodoPago= { codigo, nombre, numero, activo, qrUrl: string|null /* URL https o data URL png/jpeg/webp/gif, máx. 700.000 caracteres */ }
 ```
 
 ## Autenticación — `/api/auth`
@@ -57,9 +67,13 @@ Mientras `debeCambiarClave` sea `true`, el resto de la API para ese usuario resp
 
 | Método y ruta | Respuesta |
 |---|---|
-| `GET /api/public/config` | `{ config: Config, pagos: MetodoPago[] /* solo activos */, abierto: boolean, suscripcionActiva: boolean }` |
+| `GET /api/public/config` | `{ config: Config, pagos: MetodoPago[] /* solo activos */, abierto: boolean, suscripcionActiva: boolean, promociones: {id, nombre, etiqueta, montoMinimo}[] /* vigentes de alcance total, para mostrar el banner */, puntos: { activo, porMil, puntosCanje, descuentoCanje } }` |
 | `GET /api/menu` | `Plato[]` (solo activos, ordenados por categoría y orden). `ingredientes` y `salsas` son nombres (los mismos que van en `sin`/`salsas` del pedido) |
 | `POST /api/pedidos` | ver **Pedidos** |
+| `POST /api/pedidos/cotizar` | mismo cuerpo que `POST /api/pedidos` (basta `items`, y `celular`/`canjearPuntos` si aplica) → `{ subtotal, descuentoPromo, promocion: {id, nombre}|null, puntosCanjeados, descuentoPuntos, total }`. No guarda nada; calcula igual que el pedido. Sin sesión: 120 por minuto por IP (`429`). |
+| `POST /api/pedidos/:id/cancelar` | cuerpo `{ token }` (el de la tirilla). El cliente cancela su pedido: solo web, solo si `estado='nuevo'`. Devuelve el `Pedido` con `estado='cancelado'` y `canceladoPorCliente=true`. Token malo, ausente, de otro pedido o pedido del personal: `404`. Ya no está en `nuevo`: `409 NO_EDITABLE`. Repone inventario si estaba descontado y ajusta puntos. |
+| `PUT /api/pedidos/:id/cliente` | cuerpo = el de `POST /api/pedidos` (web, se reenvían todos los campos) + `token`. El cliente edita su pedido: solo si `estado='nuevo'` y `pagoEstado='pendiente'` (`409 NO_EDITABLE` si no). Reemplaza los ítems, recalcula promoción y puntos, conserva el mismo token y marca `editadoEn`. Si `canjearPuntos` no viene, conserva los puntos que ya había canjeado. Mismas reglas de validación, domicilios apagados (`409 DOMICILIOS_APAGADOS`) y token (`404`). |
+| `GET /api/public/puntos/:celular` | `{ celular, activo, saldo, puntosCanje, descuentoCanje }`. Solo devuelve el saldo del celular consultado (nunca nombre ni movimientos); celular no válido `400`; sin puntos `saldo: 0`. Límite de consultas por IP (`429`). |
 | `GET /api/pedidos/:id?token=...` | `Pedido` si el token es el del pedido; si no, `404`. Sin `token`, funciona para una sesión de cocina o mesera. |
 
 ## Pedidos
@@ -75,6 +89,8 @@ Mientras `debeCambiarClave` sea `true`, el resto de la API para ese usuario resp
 - `precioUnitario` de cada ítem = precio de la variante + extras elegidos; `total` = suma de los `precioUnitario`.
 - Web: `cliente` es **obligatorio**; `metodoPago` debe ser un método **activo**. `destino` en `En el local` (exige `mesa` entre 1 y `config.mesas`), `Domicilio` (exige `direccion` y `telefono`) o `Recoger en local` (exige `telefono`). Se guarda como `"En el local · Mesa 3"` cuando aplica.
 - Mesera (y cocina): `destino` libre (`"Mesa 3"`, `"Domicilio"`, `"Barra"`…), `origen='mesera'`, se ignora `metodoPago` (se fija al cobrar). `cliente`, `direccion` y `telefono` son opcionales. `mesa` es opcional; si llega, o si `destino` es `"Mesa N"`, se valida que esté entre 1 y `config.mesas` (`400` si no) y que ambos coincidan; con `destino: "Mesa"` + `mesa: 2` se guarda `"Mesa 2"`. `dev` no crea pedidos (`403`).
+- `celular` (opcional, web y mesera): se normaliza (acepta `+57`, espacios y guiones) a 10 digitos que empiezan por 3; si no es valido `400`. Identifica al cliente en los puntos. `canjearPuntos` (opcional, entero >= 0, multiplo de `config.puntosCanje`): exige `celular`, programa activo y saldo suficiente. Errores de canje con `code`: `PUNTOS_INACTIVOS` 400, `PUNTOS_INVALIDOS` 400 (no es multiplo), `PUNTOS_INSUFICIENTES` 409, `PUNTOS_EXCEDEN` 400 (el descuento supera el total).
+- Descuentos (todo lo calcula el servidor, el cliente no envia montos): `subtotal` = suma de `precioUnitario`; se aplica **una sola promocion** vigente (la que mas rebaja, no se acumulan; por plato/categoria el porcentaje va sobre los ítems que coinciden y el monto en pesos es **por unidad**; al total solo si `subtotal >= montoMinimo`); luego el canje de puntos (`puntosCanjeados / puntosCanje * descuentoCanje`) sobre el total ya rebajado. Ningun descuento deja el total en negativo. Valen para web y mesera.
 - Respuesta `201 { pedido: Pedido, token?: string }`. `token` (solo web) es el código privado para ver la tirilla: `/tirilla/:id?token=...`. En la base se guarda su SHA-256.
 - Web con suscripción inactiva: `403 SUSPENDIDO`; local cerrado según `config.h` (hora de Bogotá): `403 CERRADO`. Límite: 10 pedidos web por IP cada 10 min (`429 LIMITE`; no aplica con sesión).
 
@@ -82,10 +98,10 @@ Mientras `debeCambiarClave` sea `true`, el resto de la API para ese usuario resp
 |---|---|---|---|
 | `GET /api/pedidos` | cocina, mesera | `?desde=ISO&hasta=ISO&estado=` (por defecto: hoy) | `Pedido[]` (más recientes primero). La mesera ve todos los del día. |
 | `PUT /api/pedidos/:id` | mesera (solo los suyos, si no `403`), cocina (cualquiera, también web) | igual que el POST con las reglas de mesera | `Pedido` · solo si `estado='nuevo'`; si no, `409`. Conserva `origen` y el token de la tirilla. |
-| `PATCH /api/pedidos/:id/estado` | cocina: cualquier transición; mesera: `nuevo→cancelado` (solo los suyos) y `listo→entregado` (cualquiera); otra → `403 PROHIBIDO` | `{ estado }` | `Pedido`. Al pasar a `preparando`, `listo` o `entregado` **descuenta el inventario** una sola vez por pedido. Cancelar o volver a `nuevo` **no** devuelve inventario. `409` si el estado cambió mientras tanto. |
-| `POST /api/pedidos/:id/pago` | mesera, cocina | `{ metodoPago }` (código existente) | `Pedido` con `pagoEstado='pagado'`, `metodoPago`, `pagadoEn` y `cobradoPor` · `400` método no válido · `409` si ya estaba pagado |
+| `PATCH /api/pedidos/:id/estado` | cocina: cualquier transición; mesera: `nuevo→cancelado` (solo los suyos) y `listo→entregado` (cualquiera); otra → `403 PROHIBIDO` | `{ estado }` | `Pedido`. Al pasar a `preparando`, `listo` o `entregado` **descuenta el inventario** una sola vez por pedido. Cancelar o volver a `nuevo` **no** devuelve inventario. `409` si el estado cambió mientras tanto. Al pasar a `cancelado` se devuelven los puntos canjeados y se quitan los ganados (una vez por cancelacion). |
+| `POST /api/pedidos/:id/pago` | mesera, cocina | `{ metodoPago }` (código existente) | `Pedido` con `pagoEstado='pagado'`, `metodoPago`, `pagadoEn` y `cobradoPor` · `400` método no válido · `409` si ya estaba pagado. Si hay `celular`, el programa esta activo y el pedido no esta cancelado, suma `floor(total / 1000) * puntosPorMil` puntos (`puntosGanados`), una sola vez. |
 
-Descuento de inventario (igual que `descontar()` en la app original): por cada ítem, los ingredientes del plato que no están en `sin` × `multiplicador` de la variante, convertidos a la unidad del insumo (g↔kg↔lb, und); 15 g por cada salsa; y la cantidad de cada extra. El stock nunca queda negativo.
+Descuento de inventario (igual que `descontar()` en la app original): por cada ítem, los ingredientes del plato que no están en `sin` × `multiplicador` de la variante, convertidos a la unidad del insumo (g↔kg↔lb, ml↔L, und); 15 g por cada salsa; y la cantidad de cada extra. El stock nunca queda negativo.
 
 ## Administración (rol `cocina`)
 
@@ -93,11 +109,15 @@ Descuento de inventario (igual que `descontar()` en la app original): por cada �
 |---|---|
 | Platos | `GET /api/admin/platos` → `PlatoAdmin[]` (incluye inactivos) · `POST` (`201`) · `PUT /:id` · `DELETE /:id` → `{ ok: true, desactivado: boolean }` (lo desactiva en vez de borrarlo si tiene pedidos) |
 | Extras | `GET/POST /api/admin/extras` · `PUT/DELETE /api/admin/extras/:id` — cuerpo y respuesta `{ id, nombre, insumoId, cantidad, unidad, precio, grupo }` (`PUT` parcial) |
-| Insumos | `GET/POST /api/insumos` · `PUT /api/insumos/:id` (parcial) · `DELETE /api/insumos/:id` (`409` si un plato lo usa o si tiene compras: **las compras nunca se borran**) · `409` si el nombre ya existe · unidades `g`, `kg`, `lb`, `und` · cada insumo trae `ultimaCompra` (columnas "Ingresó / Registró") |
+| Insumos | `GET/POST /api/insumos` · `PUT /api/insumos/:id` (parcial) · `DELETE /api/insumos/:id` → `{ ok: true, desactivado: boolean }`: sin compras se borra; **con compras se desactiva** (`activo=0`, desaparece de `GET /api/insumos` y de los selectores, y no admite compras nuevas; si luego se crea una compra con `nuevoInsumo.nombre` igual, se reactiva). Si lo usan platos → `409 { error: "No se puede borrar: lo usan los platos A, B", code: "EN_USO", detalles: [{ platoId, plato }] }` (todos los platos; el frontend puede ofrecer ir a Comidas) · `409` si el nombre ya existe · unidades `und`, `g`, `kg`, `lb`, `L`, `ml` · cada insumo trae `ultimaCompra` (columnas "Ingresó / Registró") |
 | Surtidores | `GET/POST /api/surtidores` · `PUT/DELETE /api/surtidores/:id` |
-| Compras | `GET /api/compras?desde&hasta` → `Compra[]` (más recientes primero, máx. 1000) · `POST /api/compras { insumoId? , nuevoInsumo?: {nombre, tipo, unidad?}, cantidad > 0, unidad, costo, surtidorId? }` (exactamente uno de `insumoId`/`nuevoInsumo`) → `201 Compra`. Suma la cantidad al stock y al stock de referencia (con conversión g↔kg↔lb), y actualiza `costo` y `surtidorId` del insumo. `400` si la unidad no es compatible (p. ej. `und` con `kg`). Si `nuevoInsumo.nombre` ya existe, usa ese insumo. |
-| Ajustes | `GET /api/config` · `PUT /api/config` (Config parcial; responde la Config completa). Reglas: `mesas` entero 0..200, `h` exactamente 7 entradas (lunes..domingo) de `[abre, cierra]` con horas 0..24 o `null`, `logo`/`bg` texto ≤ 3 MB (URL o data URL); claves desconocidas → `400` · `GET /api/metodos-pago` (todos, también inactivos) · `POST /api/metodos-pago { nombre, numero?, activo? = true }` → `201 MetodoPago` (el `codigo` lo genera el servidor a partir del nombre; `409` si el nombre ya existe) · `PUT /api/metodos-pago/:codigo { nombre?, numero?, activo? }` → `MetodoPago` (`404` si no existe) · `DELETE /api/metodos-pago/:codigo` → `{ ok: true, desactivado: boolean }` (si algún pedido lo usó, solo se desactiva) |
+| Compras | `GET /api/compras?desde&hasta` → `Compra[]` (más recientes primero, máx. 1000) · `POST /api/compras { insumoId? , nuevoInsumo?: {nombre, tipo, unidad?}, cantidad > 0, unidad, costo, surtidorId? }` (exactamente uno de `insumoId`/`nuevoInsumo`) → `201 Compra`. Suma la cantidad al stock y al stock de referencia (con conversión g↔kg↔lb), y actualiza `costo` y `surtidorId` del insumo. `400` si la unidad no es compatible (p. ej. `und` con `kg`, o `L` con `g`). Unidades: masa `g`/`kg`/`lb` y volumen `ml`/`L` se convierten dentro de su grupo (1 kg = 1000 g, 1 lb = 453,592 g, 1 L = 1000 ml); `und` solo con `und`. · `DELETE /api/compras/:id` (cocina) → `{ ok: true }`: borra la compra y resta del stock y del stock de referencia lo que sumó (sin bajar de 0); deja bitácora; `404` si no existe. Si `nuevoInsumo.nombre` ya existe, usa ese insumo. |
+| Ajustes | `GET /api/config` · `PUT /api/config` (Config parcial; responde la Config completa). Reglas: `mesas` entero 0..200, `h` exactamente 7 entradas (lunes..domingo) de `[abre, cierra]` con horas 0..24 o `null`, `logo`/`bg` texto ≤ 3 MB (URL o data URL); claves desconocidas → `400` · `sonido` (uno de los 5 ids; el navegador lo sintetiza) y `domiciliosActivos` (boolean) se guardan aquí y también salen en `GET /api/public/config` · con `domiciliosActivos=false`, `POST /api/pedidos` **web** con `destino: "Domicilio"` responde `409 { code: "DOMICILIOS_APAGADOS" }` (mesera y cocina no se ven afectadas; el cliente debe ocultar la opción) · `GET /api/metodos-pago` (todos, también inactivos) · `POST /api/metodos-pago { nombre, numero?, activo? = true, qrUrl? }` → `201 MetodoPago` (el `codigo` lo genera el servidor a partir del nombre; `409` si el nombre ya existe) · `PUT /api/metodos-pago/:codigo { nombre?, numero?, activo?, qrUrl? }` (`qrUrl: null` quita la imagen; tipo o tamaño no válido → `400 VALIDACION`; el cliente ve el QR en `GET /api/public/config` → `pagos[].qrUrl`) → `MetodoPago` (`404` si no existe) · `DELETE /api/metodos-pago/:codigo` → `{ ok: true, desactivado: boolean }` (si algún pedido lo usó, solo se desactiva) |
 | Reportes | `GET /api/reportes/ventas?desde=AAAA-MM-DD&hasta=AAAA-MM-DD` (por defecto: hoy; `hasta` inclusivo) → `{ total, pedidos, cobrado, porCobrar, comprasWeb, porPlato: [{nombre, cantidad, total}], porMetodo: [{metodo, total}], porDia: [{fecha: 'AAAA-MM-DD', total}], compras }`. Solo pedidos no cancelados. `cobrado` = total de los pagados; `porCobrar` = `total - cobrado`; `comprasWeb` = número de pedidos web; `metodo: 'Sin método'` si no tiene método; `compras` = suma de costos de compras de insumos del rango. Ticket promedio = `total / pedidos` (lo calcula el cliente). |
+| Facturas | `GET /api/facturas?desde&hasta&q&pagina=1&porPagina=20` (cocina) → `{ total, pagina, porPagina, paginas, facturas: Pedido[] }`. Una factura (tirilla) por pedido, **incluidos cancelados**, más recientes primero; cada una trae todo el detalle para pintar el recibo. `desde`/`hasta` como en el resto de rangos (sin fechas: todo el historial). `q` busca por número de pedido (`12` o `#12`), cliente, teléfono, celular o destino. `pagina` ≥ 1, `porPagina` 1..100; valores fuera de rango → `400 VALIDACION`. |
+| Reiniciar reportes | `POST /api/admin/reiniciar-reportes { confirmar: "BORRAR" }` (solo cocina) → `{ ok: true, pedidos, compras, bitacora }` (cantidades borradas). Borra pedidos e ítems (y con ellos ventas, historial, facturas e inversión vs ganancia), las compras de insumos y la bitácora; **no** toca menú, insumos, stock, usuarios, ajustes, promociones ni puntos. Después deja una sola fila en bitácora: "Reinició los reportes". Sin `confirmar` exacto → `400 VALIDACION`. |
+| Promociones | `GET /api/promociones` → `Promocion[]` · `POST` (`201`) · `PUT /:id` (parcial) · `DELETE /:id` → `{ ok: true }`. Cuerpo: `{ nombre (1..80), tipo, alcance, platoId (alcance plato), categoria (nombre, alcance categoria), valor (> 0; porcentaje <= 100), montoMinimo? (solo alcance total), inicio, fin (inicio <= fin), dias?: number[]|null, horaDesde?, horaHasta? (van juntas), activa? = true }`. `400 VALIDACION` si algo no cumple; `404` si no existe. Una promocion solo aplica si `vigente` (activa, dentro de fechas, dia y franja horaria en hora de Bogota). |
+| Puntos | `GET /api/puntos/clientes?q=` → `[{ celular, nombre, saldo, actualizadoEn }]` (mayor saldo primero, max. 200) · `GET /api/puntos/clientes/:celular/movimientos` → `{ celular, nombre, saldo, movimientos: [{ id, pedidoId, tipo: 'ganado'|'canjeado'|'devuelto'|'revertido', puntos /* con signo */, creadoEn }] }` (`404` si no hay cliente). Solo cocina. |
 | Bitácora | `GET /api/bitacora?limit=200` (1..1000) → `[{ id, fecha, usuario, nombre, accion, ip }]` más recientes primero (cocina y dev). El cliente web aparece como `usuario: 'cliente'`. |
 
 ```ts
@@ -111,6 +131,10 @@ PlatoBody  = { nombre, emoji?, imagenUrl?, categoria /* se crea si no existe */,
                ingredientes?: {insumoId, cantidad, unidad?}[],
                salsas?: number[] /* ids de insumos tipo 'salsa' */, extras?: number[] /* ids de extras */ }
 ```
+
+### Puntos de fidelidad (ajustes en `PUT /api/config`)
+
+`puntosActivos` (boolean, por defecto `false`), `puntosPorMil` (entero 0..1000, puntos por cada $1.000 cobrados, por defecto 1), `puntosCanje` (entero >= 1, puntos que vale un canje, por defecto 100) y `descuentoCanje` (entero >= 0, pesos que descuenta cada canje, por defecto 1.000). Los puntos se suman al **confirmar el pago**, se descuentan del saldo al **crear** el pedido con `canjearPuntos` y se reversan al cancelar. El saldo es por `celular`, sin cuenta ni clave: quien conoce el celular puede consultarlo y canjearlo.
 
 ## Usuarios y suscripción
 

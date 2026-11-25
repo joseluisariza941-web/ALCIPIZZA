@@ -11,8 +11,8 @@ import { descargarPdf, pdfRecibo } from '../cliente/pdf.js';
 const PASOS = ['Recibido', 'Preparando', 'Listo', 'Entregado'];
 const ESTADOS = ['nuevo', 'preparando', 'listo', 'entregado'];
 
-/** @param {{ pedido: any, onCerrar: () => void }} p */
-export default function Recibo({ pedido: o, onCerrar }) {
+/** @param {{ pedido: any, onCerrar: () => void, conWhatsApp?: boolean }} p  conWhatsApp: solo para el personal (el cliente no envía el pedido por WhatsApp). */
+export default function Recibo({ pedido: o, onCerrar, conWhatsApp = false }) {
   const { config: c, pagos } = usePublicConfig();
   const mp = o.metodoPago?.nombre || '';
   const pm = pagos.find(x => x.codigo === o.metodoPago?.codigo);
@@ -44,7 +44,7 @@ export default function Recibo({ pedido: o, onCerrar }) {
         <div className="row no" style={{ marginTop: '.8rem' }}>
           <button className="btn s" onClick={() => window.print()}>🖨️ Imprimir</button>
           <button className="btn s" onClick={() => descargarPdf(pdfRecibo(o, c), `pedido-${o.id}.pdf`)}>⬇️ Descargar PDF</button>
-          <a className="btn s wa" target="_blank" rel="noopener noreferrer" href={waLink(o, c)}><IconoWhatsApp /> Enviar al WhatsApp</a>
+          {conWhatsApp && <a className="btn s wa" target="_blank" rel="noopener noreferrer" href={waLink(o, c)}><IconoWhatsApp /> Enviar al WhatsApp</a>}
           <button className="btn s y" onClick={onCerrar}>Cerrar</button>
         </div>
       </div>

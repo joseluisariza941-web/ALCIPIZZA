@@ -159,6 +159,12 @@ final class Pedidos
             if (self::largo($m) > 10) V::fallo('Too big: expected string to have <=10 characters', ['metodoPago']);
             $b['metodoPago'] = $m;
         }
+        if (array_key_exists('celular', $d) && $d['celular'] !== null && $d['celular'] !== '') $b['celular'] = Puntos::normalizar($d['celular']);
+        if (array_key_exists('canjearPuntos', $d)) {
+            $c = $d['canjearPuntos'];
+            if (!is_int($c) || $c < 0 || $c > 1000000) V::fallo('Puntos a canjear no válidos', ['canjearPuntos']);
+            $b['canjearPuntos'] = $c;
+        }
         $items = $d['items'] ?? null;
         if (!is_array($items) || ($items !== [] && !array_is_list($items))) V::fallo('El pedido está vacío', ['items']);
         if (count($items) < 1) V::fallo('El pedido está vacío', ['items']);
@@ -210,12 +216,35 @@ final class Pedidos
             $precio = Fmt::num($precio);
             $total += $precio;
             $out[] = [
-                'plato_id' => $p['id'], 'variante_id' => $v['id'], 'nombre' => $p['nombre'], 'emoji' => $p['emoji'] ?? null,
+                'plato_id' => $p['id'], 'categoria' => $p['categoria'], 'variante_id' => $v['id'], 'nombre' => $p['nombre'], 'emoji' => $p['emoji'] ?? null,
                 'variante' => $v['nombre'], 'precio_unitario' => $precio, 'nota' => $c['nota'] !== '' ? $c['nota'] : null,
                 'extras' => $extras, 'salsas' => $salsas, 'sin' => $sin,
             ];
         }
         return ['items' => $out, 'total' => Fmt::num($total)];
+    }
+
+    /**
+     * Descuentos sobre el subtotal cotizado: mejor promoción vigente y, si se pide, canje de puntos.
+     * @return array{subtotal: int|float, descuentoPromo: int|float, promo: ?array, puntosCanjeados: int, descuentoPuntos: int|float, total: int|float}
+     */
+    public static function liquidar(array $items, int|float $subtotal, int $canjear = 0, ?string $celular = null, bool $staff = false): array
+    {
+        [$descPromo, $promo] = Promociones::mejor($items, $subtotal);
+        $tras = $subtotal - $descPromo;
+        $puntos = 0;
+        $descPuntos = 0;
+        if ($canjear > 0) [$puntos, $descPuntos] = Puntos::canje($canjear, $celular, $tras);
+        return ['subtotal' => $subtotal, 'descuentoPromo' => $descPromo, 'promo' => $promo,
+            'puntosCanjeados' => $puntos, 'descuentoPuntos' => $descPuntos, 'total' => Fmt::num($tras - $descPuntos)];
+    }
+
+    /** Columnas de pedidos que deja una liquidación. */
+    public static function columnasLiquidacion(array $l): array
+    {
+        return ['subtotal' => $l['subtotal'], 'descuento_promo' => $l['descuentoPromo'],
+            'promocion_id' => $l['promo']['id'] ?? null, 'promocion_nombre' => $l['promo']['nombre'] ?? null,
+            'puntos_canjeados' => $l['puntosCanjeados'], 'descuento_puntos' => $l['descuentoPuntos'], 'total' => $l['total']];
     }
 
     /**
@@ -338,6 +367,15 @@ final class Pedidos
             'cliente' => $p['cliente'] ?? null,
             'direccion' => $p['direccion'] ?? null,
             'telefono' => $p['telefono'] ?? null,
+            'celular' => $p['celular'] ?? null,
+            'subtotal' => Fmt::num($p['subtotal'] ?? $p['total']),
+            'descuentoPromo' => Fmt::num($p['descuento_promo']),
+            'promocion' => $p['promocion_id'] || $p['promocion_nombre'] ? ['id' => self::intOrNull($p['promocion_id']), 'nombre' => $p['promocion_nombre']] : null,
+            'puntosCanjeados' => (int) $p['puntos_canjeados'],
+            'descuentoPuntos' => Fmt::num($p['descuento_puntos']),
+            'puntosGanados' => (int) $p['puntos_ganados'],
+            'editadoEn' => Fmt::iso($p['editado_en'] ?? null),
+            'canceladoPorCliente' => (bool) (int) $p['cancelado_por_cliente'],
             'total' => Fmt::num($p['total']),
             'estado' => $p['estado'],
             'pagoEstado' => $p['pago_estado'],
@@ -361,9 +399,28 @@ final class Pedidos
     {
         $marcado = Db::ejecutar('UPDATE pedidos SET inventario_descontado = 1 WHERE id = ? AND inventario_descontado = 0', [$pedidoId]);
         if (!$marcado) return false;
+        foreach (self::consumo($pedidoId) as $id => $q) {
+            Db::ejecutar('UPDATE insumos SET stock = GREATEST(0, ROUND(stock - ?, 3)) WHERE id = ?', [$q, $id]);
+        }
+        return true;
+    }
 
+    /** Repone el inventario descontado de un pedido (cancelación o edición). Dentro de Db::tx. */
+    public static function devolverInventario(int $pedidoId): bool
+    {
+        $marcado = Db::ejecutar('UPDATE pedidos SET inventario_descontado = 0 WHERE id = ? AND inventario_descontado = 1', [$pedidoId]);
+        if (!$marcado) return false;
+        foreach (self::consumo($pedidoId) as $id => $q) {
+            Db::ejecutar('UPDATE insumos SET stock = ROUND(stock + ?, 3) WHERE id = ?', [$q, $id]);
+        }
+        return true;
+    }
+
+    /** Consumo de insumos de un pedido: insumoId → cantidad en la unidad del insumo. */
+    private static function consumo(int $pedidoId): array
+    {
         $items = Db::todos('SELECT * FROM pedido_items WHERE pedido_id = ?', [$pedidoId]);
-        if (!$items) return true;
+        if (!$items) return [];
         $iid = array_map(fn($x) => (int) $x['id'], $items);
         $in = Db::marcas($iid);
         $salsas = Db::todos("SELECT * FROM pedido_item_salsas WHERE item_id IN ($in)", $iid);
@@ -406,10 +463,7 @@ final class Pedidos
                 if ((int) $e['item_id'] === $itId) $dec($e['insumo_id'] !== null ? ($porId[(int) $e['insumo_id']] ?? null) : null, (float) $e['cantidad'], $e['unidad']);
             }
         }
-        foreach ($total as $id => $q) {
-            Db::ejecutar('UPDATE insumos SET stock = GREATEST(0, ROUND(stock - ?, 3)) WHERE id = ?', [$q, $id]);
-        }
-        return true;
+        return $total;
     }
 
     /** '$' + Number(v).toLocaleString('es-CO'): 27000 → "$27.000", 1234.5 → "$1.234,5". */

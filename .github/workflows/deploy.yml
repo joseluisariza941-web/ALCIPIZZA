@@ -1,0 +1,114 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Desplegar en Hostinger
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    env:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PORT: ${{ secrets.SSH_PORT }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      SITE_URL: ${{ secrets.SITE_URL }}
+    steps:
+      - name: Comprobar secretos
+        id: secretos
+        env:
+          SSH_KEY_SET: ${{ secrets.SSH_KEY != '' }}
+        run: |
+          faltan=()
+          for nombre in SSH_HOST SSH_PORT SSH_USER SSH_KEY_SET DEPLOY_PATH SITE_URL; do
+            if [ -z "${!nombre:-}" ] || [ "${!nombre}" = "false" ]; then
+              faltan+=("$nombre")
+            fi
+          done
+          if [ "${#faltan[@]}" -gt 0 ]; then
+            {
+              echo "### Despliegue omitido"
+              echo ""
+              echo "Faltan secretos de Actions: ${faltan[*]}."
+              echo "Configúralos en Settings → Secrets and variables → Actions y vuelve a ejecutar el despliegue."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "omitir=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "omitir=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.secretos.outputs.omitir != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Preparar Node 22
+        if: steps.secretos.outputs.omitir != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Instalar dependencias del cliente
+        if: steps.secretos.outputs.omitir != 'true'
+        working-directory: client
+        run: npm ci
+
+      - name: Construir paquete de despliegue
+        if: steps.secretos.outputs.omitir != 'true'
+        run: node php-api/scripts/build-deploy.mjs --no-sql
+
+      - name: Preparar llave SSH
+        if: steps.secretos.outputs.omitir != 'true'
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -T 10 -p "$SSH_PORT" "$SSH_HOST" >> "$HOME/.ssh/known_hosts"
+
+      - name: Subir public_html
+        if: steps.secretos.outputs.omitir != 'true'
+        run: |
+          rsync -az --delete --exclude '.well-known/' -e "ssh -p $SSH_PORT -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes" deploy/public_html/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/public_html/"
+
+      - name: Subir alcipizza-api (sin tocar .env)
+        if: steps.secretos.outputs.omitir != 'true'
+        run: |
+          rsync -az --exclude '.env' -e "ssh -p $SSH_PORT -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes" deploy/alcipizza-api/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/alcipizza-api/"
+
+      - name: Sincronizar alcipizza-api/src
+        if: steps.secretos.outputs.omitir != 'true'
+        run: |
+          rsync -az --delete -e "ssh -p $SSH_PORT -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes" deploy/alcipizza-api/src/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/alcipizza-api/src/"
+
+      - name: Comprobar /api/health
+        if: steps.secretos.outputs.omitir != 'true'
+        run: |
+          url="${SITE_URL%/}/api/health"
+          for intento in 1 2 3 4 5; do
+            echo "Comprobando $url (intento $intento/5)"
+            if cuerpo="$(curl -fsS "$url")"; then
+              echo "$cuerpo"
+              case "$cuerpo" in
+                *'"ok":true'*) exit 0 ;;
+              esac
+            fi
+            if [ "$intento" -lt 5 ]; then
+              sleep 5
+            fi
+          done
+          echo "::error::$url no respondió ok tras 5 intentos"
+          exit 1

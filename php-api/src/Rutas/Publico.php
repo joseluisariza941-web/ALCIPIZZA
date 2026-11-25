@@ -6,7 +6,7 @@ namespace Alci\Rutas;
 use Alci\Core\Db;
 use Alci\Core\Request;
 use Alci\Core\Router;
-use Alci\Servicios\{Config, Horario, Menu, Suscripcion};
+use Alci\Servicios\{Config, Horario, Menu, Promociones, Puntos, Suscripcion};
 
 /** Igual que routes/publico.js: config pública y menú. */
 final class Publico
@@ -24,9 +24,15 @@ final class Publico
                 'pagos' => Config::metodosPago(true),
                 'abierto' => Horario::estaAbierto($cfg['h'] ?? null),
                 'suscripcionActiva' => Suscripcion::activa(),
+                'promociones' => array_map(fn($p) => ['id' => $p['id'], 'nombre' => $p['nombre'], 'etiqueta' => $p['etiqueta'], 'montoMinimo' => $p['montoMinimo']],
+                    array_values(array_filter(Promociones::vigentes(), fn($p) => $p['alcance'] === 'total'))),
+                'puntos' => (function () { $a = Puntos::ajustes(); return ['activo' => $a['activo'], 'porMil' => $a['porMil'], 'puntosCanje' => $a['canje'], 'descuentoCanje' => $a['descuento']]; })(),
             ];
         });
 
-        $r->get('/api/menu', fn(Request $req) => array_map([Menu::class, 'publico'], Menu::cargarPlatos(true)));
+        $r->get('/api/menu', function (Request $req) {
+            $promos = Promociones::vigentes();
+            return array_map(fn($p) => Menu::publico($p, $promos), Menu::cargarPlatos(true));
+        });
     }
 }

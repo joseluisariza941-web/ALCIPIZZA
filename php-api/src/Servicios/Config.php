@@ -7,6 +7,9 @@ use Alci\Core\Db;
 
 final class Config
 {
+    /** Sonidos de notificación de cocina (los sintetiza el navegador). */
+    public const SONIDOS = ['campana', 'timbre', 'pulso', 'arpegio', 'alarma'];
+
     /** Config general como array asociativo ([] si no existe). */
     public static function leer(): array
     {
@@ -23,7 +26,8 @@ final class Config
 
     public static function aMetodo(array $m): array
     {
-        return ['codigo' => $m['codigo'], 'nombre' => $m['nombre'], 'numero' => $m['numero'] ?? null, 'activo' => (bool) (int) $m['activo']];
+        return ['codigo' => $m['codigo'], 'nombre' => $m['nombre'], 'numero' => $m['numero'] ?? null, 'activo' => (bool) (int) $m['activo'],
+            'qrUrl' => ($m['qr_url'] ?? '') !== '' ? $m['qr_url'] : null];
     }
 
     public static function metodosPago(bool $soloActivos = false): array

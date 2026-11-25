@@ -56,6 +56,22 @@ describe('Shell (encabezado, colores, candado, pie)', () => {
     expect(screen.getByRole('link', { name: '📞 3001112233' })).toHaveAttribute('href', 'tel:3001112233');
   });
 
+  it('el pie enlaza Facebook y la ubicación en pestaña nueva', async () => {
+    conConfig();
+    renderWith(<Shell />);
+    const fb = await screen.findByRole('link', { name: 'Facebook de Alcipizza' });
+    expect(fb).toHaveAttribute('href', 'https://www.facebook.com/alcipi');
+    expect(fb).toHaveAttribute('target', '_blank');
+    expect(fb).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(fb.querySelector('svg')).toBeTruthy();
+    const mapa = screen.getByRole('link', { name: 'Ver ubicación de Alcipizza en Google Maps' });
+    expect(mapa).toHaveAttribute('href', 'https://maps.app.goo.gl/RMeGi2dnmzTygJXh7');
+    expect(mapa).toHaveAttribute('target', '_blank');
+    expect(mapa).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(mapa).toHaveTextContent('Cl. 4, Guepsa, Güepsa, Santander');
+    expect(mapa.querySelector('svg')).toBeTruthy();
+  });
+
   it('en una pantalla del personal muestra el nombre y "Salir" cierra sesión', async () => {
     conConfig();
     const { auth } = renderWith(<Shell />, { route: '/cocina', user: { id: 2, usuario: 'admin', nombre: 'Cocina', rol: 'cocina' } });

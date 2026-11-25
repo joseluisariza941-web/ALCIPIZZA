@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Alci\Rutas;
 
 use Alci\Core\{Auth, Db, Fmt, HttpError, RateLimit, Request, Respuesta, Router, Sesion, V};
-use Alci\Servicios\{Bitacora, Config, Horario, Rango, Suscripcion};
+use Alci\Servicios\{Bitacora, Config, Horario, Puntos, Rango, Suscripcion};
 use Alci\Servicios\Pedidos as P;
 
 /** Igual que routes/pedidos.js. */
@@ -24,6 +24,41 @@ final class Pedidos
     {
         $m = P::aNumero($cfg['mesas'] ?? null);
         return $m === null ? 0 : (int) $m;
+    }
+
+    private static function limiteCliente(Request $req): void
+    {
+        RateLimit::exigir('tirilla-mod', max(1, (int) env('TIRILLA_MOD_MAX', '30')), 600, $req->ip, 'Demasiados intentos. Espera unos minutos.');
+    }
+
+    /** Pedido del cliente por token; 404 si el token no es válido o el pedido es del personal (sin token). */
+    private static function delCliente(int $id, mixed $token): array
+    {
+        $fila = Db::uno('SELECT * FROM pedidos WHERE id = ?', [$id]);
+        if (!$fila || !$fila['token_hash'] || !is_string($token) || $token === '' || !hash_equals((string) $fila['token_hash'], hash('sha256', $token))) {
+            throw new HttpError(404, 'Pedido no encontrado');
+        }
+        return $fila;
+    }
+
+    /** Reemplaza los datos de un pedido "nuevo" (cliente o personal): reliquida, repone inventario y ajusta puntos. */
+    private static function reeditar(Request $req, int $id, array $b, array $destino, bool $cliente, ?array $user): void
+    {
+        ['items' => $items, 'total' => $subtotal] = P::cotizar($b['items']);
+        Db::tx(function () use ($req, $id, $b, $destino, $cliente, $user, $items, $subtotal) {
+            $a = Db::uno('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [$id]);
+            if (!$a || $a['estado'] !== 'nuevo') throw new HttpError(409, 'El pedido ya está en preparación y no se puede editar', 'NO_EDITABLE');
+            if ($cliente && $a['pago_estado'] === 'pagado') throw new HttpError(409, 'El pedido ya está pagado y no se puede editar', 'NO_EDITABLE');
+            P::devolverInventario($id);
+            Puntos::devolverCanje($a);
+            $celular = $b['celular'] ?? $a['celular'];
+            $l = P::liquidar($items, $subtotal, $b['canjearPuntos'] ?? (int) $a['puntos_canjeados'], $celular);
+            Db::actualizar('pedidos', [...$destino, 'celular' => $celular, ...P::columnasLiquidacion($l)], 'id = ?', [$id]);
+            Db::ejecutar('UPDATE pedidos SET editado_en = NOW() WHERE id = ?', [$id]);
+            if ($l['puntosCanjeados'] > 0) Puntos::debitar($celular, $l['puntosCanjeados'], $id);
+            P::guardarItems($id, $items);
+            Bitacora::registrar($req, ($cliente ? 'El cliente editó' : 'Editó') . " el pedido #$id · " . P::pesos($l['total']), $cliente ? null : $user);
+        });
     }
 
     public static function registrar(Router $r): void
@@ -51,15 +86,22 @@ final class Pedidos
                     throw new HttpError(403, 'Estamos cerrados en este momento. Revisa nuestros horarios.', 'CERRADO');
                 }
             }
+            if (!$staff && $b['destino'] === 'Domicilio' && ($cfg['domiciliosActivos'] ?? true) === false) {
+                throw new HttpError(409, 'Por ahora no tenemos servicio a domicilio. Puedes recoger en el local o pedir en una mesa.', 'DOMICILIOS_APAGADOS');
+            }
             $destino = P::datosDestino($b, $staff, self::mesas($cfg), $metodos);
-            ['items' => $items, 'total' => $total] = P::cotizar($b['items']);
+            ['items' => $items, 'total' => $subtotal] = P::cotizar($b['items']);
+            $celular = $b['celular'] ?? null;
+            $l = P::liquidar($items, $subtotal, $b['canjearPuntos'] ?? 0, $celular);
+            $total = $l['total'];
             $token = $staff ? null : rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
 
-            $id = Db::tx(function () use ($req, $u, $staff, $destino, $items, $total, $token) {
+            $id = Db::tx(function () use ($req, $u, $staff, $destino, $items, $total, $token, $l, $celular) {
                 $nuevo = Db::insertar('pedidos', [
                     'origen' => $staff ? 'mesera' : 'web', 'mesera_id' => $staff ? (int) $u['id'] : null, ...$destino,
-                    'total' => $total, 'token_hash' => $token ? hash('sha256', $token) : null,
+                    'celular' => $celular, ...P::columnasLiquidacion($l), 'token_hash' => $token ? hash('sha256', $token) : null,
                 ]);
+                if ($l['puntosCanjeados'] > 0) Puntos::debitar($celular, $l['puntosCanjeados'], $nuevo);
                 P::guardarItems($nuevo, $items);
                 $txt = ($staff ? 'Creó el pedido' : 'Envió pedido') . " #$nuevo · {$destino['destino']} · " . P::pesos($total);
                 Bitacora::registrar($req, $txt, $u);
@@ -109,13 +151,53 @@ final class Pedidos
             }
             $b = P::validar($req->body);
             $destino = P::datosDestino($b, true, self::mesas(Config::leer()));
-            ['items' => $items, 'total' => $total] = P::cotizar($b['items']);
-            Db::tx(function () use ($req, $id, $destino, $items, $total) {
-                $n = Db::actualizar('pedidos', [...$destino, 'total' => $total], "id = ? AND estado = 'nuevo'", [$id]);
-                if (!$n) throw new HttpError(409, 'El pedido ya está en preparación y no se puede editar');
-                P::guardarItems($id, $items);
-                Bitacora::registrar($req, "Editó el pedido #$id · " . P::pesos($total));
+            self::reeditar($req, $id, $b, $destino, false, $user);
+            return P::cargarPedido($id);
+        });
+
+        // Cotización sin guardar: mismo cálculo que el pedido (promoción y puntos).
+        $r->post('/api/pedidos/cotizar', function (Request $req) {
+            if (!Sesion::get('userId')) RateLimit::exigir('cotizar', 120, 60, $req->ip, 'Demasiadas consultas. Espera un momento.');
+            $b = P::validar($req->body);
+            ['items' => $items, 'total' => $subtotal] = P::cotizar($b['items']);
+            $l = P::liquidar($items, $subtotal, $b['canjearPuntos'] ?? 0, $b['celular'] ?? null);
+            return [
+                'subtotal' => $l['subtotal'], 'descuentoPromo' => $l['descuentoPromo'],
+                'promocion' => $l['promo'] ? ['id' => $l['promo']['id'], 'nombre' => $l['promo']['nombre']] : null,
+                'puntosCanjeados' => $l['puntosCanjeados'], 'descuentoPuntos' => $l['descuentoPuntos'], 'total' => $l['total'],
+            ];
+        });
+
+        // El cliente cancela su pedido con el token de la tirilla (solo mientras está "nuevo").
+        $r->post('/api/pedidos/:id/cancelar', function (Request $req, array $params) {
+            self::limiteCliente($req);
+            $id = P::id($params);
+            self::delCliente($id, $req->datos()['token'] ?? null);
+            Db::tx(function () use ($req, $id) {
+                $a = Db::uno('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [$id]);
+                if (!$a || $a['estado'] !== 'nuevo') throw new HttpError(409, 'El pedido ya está en preparación y no se puede cancelar', 'NO_EDITABLE');
+                Db::ejecutar("UPDATE pedidos SET estado = 'cancelado', cancelado_por_cliente = 1 WHERE id = ?", [$id]);
+                P::devolverInventario($id);
+                Puntos::alCancelar($a);
+                Bitacora::registrar($req, "El cliente canceló el pedido #$id", null);
             });
+            return P::cargarPedido($id);
+        });
+
+        // El cliente edita su pedido con el token de la tirilla (solo "nuevo" y sin pagar).
+        $r->put('/api/pedidos/:id/cliente', function (Request $req, array $params) {
+            self::limiteCliente($req);
+            $id = P::id($params);
+            $body = is_array($req->body) ? $req->body : [];
+            self::delCliente($id, $body['token'] ?? null);
+            unset($body['token']);
+            $cfg = Config::leer();
+            $b = P::validar($body);
+            if ($b['destino'] === 'Domicilio' && ($cfg['domiciliosActivos'] ?? true) === false) {
+                throw new HttpError(409, 'Por ahora no tenemos servicio a domicilio. Puedes recoger en el local o pedir en una mesa.', 'DOMICILIOS_APAGADOS');
+            }
+            $destino = P::datosDestino($b, false, self::mesas($cfg), Config::metodosPago());
+            self::reeditar($req, $id, $b, $destino, true, null);
             return P::cargarPedido($id);
         });
 
@@ -135,6 +217,7 @@ final class Pedidos
                 // la condición sobre el estado anterior evita carreras (p. ej. cancelar justo cuando cocina lo toma)
                 $n = Db::actualizar('pedidos', ['estado' => $estado], 'id = ? AND estado = ?', [$id, $actual['estado']]);
                 if (!$n && $actual['estado'] !== $estado) throw new HttpError(409, 'El pedido cambió de estado; recarga e intenta de nuevo');
+                if ($n && $estado === 'cancelado' && $actual['estado'] !== 'cancelado') Puntos::alCancelar($actual);
                 if (in_array($estado, self::DESCUENTAN, true)) P::descontarInventario($id);
                 Bitacora::registrar($req, "Pedido #$id: {$actual['estado']} → $estado");
             });
@@ -151,9 +234,13 @@ final class Pedidos
             $m = Db::uno('SELECT * FROM metodos_pago WHERE codigo = ?', [$metodo]);
             if (!$m) throw new HttpError(400, 'Método de pago no válido');
             if ($actual['pago_estado'] === 'pagado') throw new HttpError(409, 'El pedido ya está pagado');
-            Db::ejecutar('UPDATE pedidos SET pago_estado = ?, metodo_pago = ?, pagado_en = NOW(), cobrado_por = ? WHERE id = ?',
-                ['pagado', $m['codigo'], (int) $user['id'], $id]);
-            Bitacora::registrar($req, "Confirmó pago #$id ({$m['nombre']}) " . P::pesos($actual['total']));
+            Db::tx(function () use ($req, $id, $m, $user, $actual) {
+                $n = Db::ejecutar("UPDATE pedidos SET pago_estado = 'pagado', metodo_pago = ?, pagado_en = NOW(), cobrado_por = ? WHERE id = ? AND pago_estado <> 'pagado'",
+                    [$m['codigo'], (int) $user['id'], $id]);
+                if (!$n) throw new HttpError(409, 'El pedido ya está pagado');
+                if ($actual['estado'] !== 'cancelado') Puntos::ganar($actual);
+                Bitacora::registrar($req, "Confirmó pago #$id ({$m['nombre']}) " . P::pesos($actual['total']));
+            });
             return P::cargarPedido($id);
         });
     }

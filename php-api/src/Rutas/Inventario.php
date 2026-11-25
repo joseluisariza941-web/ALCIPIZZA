@@ -86,7 +86,7 @@ final class Inventario
     /** Insumos con su última compra (fecha, cantidad, unidad y quién la registró). */
     private static function cargarInsumos(?int $id = null): array
     {
-        $filas = $id ? Db::todos('SELECT * FROM insumos WHERE id = ? ORDER BY id', [$id]) : Db::todos('SELECT * FROM insumos ORDER BY id');
+        $filas = $id ? Db::todos('SELECT * FROM insumos WHERE id = ? AND activo = 1 ORDER BY id', [$id]) : Db::todos('SELECT * FROM insumos WHERE activo = 1 ORDER BY id');
         $sql = 'SELECT c.insumo_id, c.fecha, c.cantidad, c.unidad, u.nombre AS usuario
             FROM compras c LEFT JOIN usuarios u ON u.id = c.registrado_por
             WHERE c.id IN (SELECT MAX(id) FROM compras GROUP BY insumo_id)';
@@ -160,7 +160,7 @@ final class Inventario
         $r->put('/api/insumos/:id', function (Request $req, array $p) {
             Auth::rol($req, 'cocina');
             $id = Z::idUrl($p);
-            $actual = Db::uno('SELECT * FROM insumos WHERE id = ?', [$id]);
+            $actual = Db::uno('SELECT * FROM insumos WHERE id = ? AND activo = 1', [$id]);
             if (!$actual) throw new HttpError(404, 'Insumo no encontrado');
             $b = Z::validar(self::insumoSchema(), array_replace(self::aInsumo($actual), $req->datos()));
             self::revisarSurtidor($b['surtidorId']);
@@ -177,15 +177,19 @@ final class Inventario
             $id = Z::idUrl($p);
             $actual = Db::uno('SELECT * FROM insumos WHERE id = ?', [$id]);
             if (!$actual) throw new HttpError(404, 'Insumo no encontrado');
-            $plato = Db::valor('SELECT p.nombre FROM plato_ingredientes pi JOIN platos p ON p.id = pi.plato_id
-                WHERE pi.insumo_id = ? LIMIT 1', [$id]);
-            if ($plato !== null) throw new HttpError(409, "No se puede borrar: lo usa el plato $plato");
-            if (Db::valor('SELECT id FROM compras WHERE insumo_id = ? LIMIT 1', [$id]) !== null) {
-                throw new HttpError(409, 'No se puede borrar: tiene compras registradas');
+            $platos = Db::todos('SELECT DISTINCT p.id, p.nombre FROM plato_ingredientes pi JOIN platos p ON p.id = pi.plato_id
+                WHERE pi.insumo_id = ? ORDER BY p.nombre', [$id]);
+            if ($platos) {
+                $nombres = implode(', ', array_map(fn($p) => $p['nombre'], $platos));
+                throw new HttpError(409, (count($platos) > 1 ? "No se puede borrar: lo usan los platos $nombres" : "No se puede borrar: lo usa el plato $nombres"),
+                    'EN_USO', array_map(fn($p) => ['platoId' => (int) $p['id'], 'plato' => $p['nombre']], $platos));
             }
-            Db::ejecutar('DELETE FROM insumos WHERE id = ?', [$id]);
-            Bitacora::registrar($req, "Eliminó el insumo {$actual['nombre']}");
-            return ['ok' => true];
+            // con compras no se borra (se pierde el historial): se desactiva y se oculta
+            $desactivar = Db::valor('SELECT id FROM compras WHERE insumo_id = ? LIMIT 1', [$id]) !== null;
+            if ($desactivar) Db::ejecutar('UPDATE insumos SET activo = 0 WHERE id = ?', [$id]);
+            else Db::ejecutar('DELETE FROM insumos WHERE id = ?', [$id]);
+            Bitacora::registrar($req, ($desactivar ? 'Desactivó' : 'Eliminó') . " el insumo {$actual['nombre']}");
+            return ['ok' => true, 'desactivado' => $desactivar];
         });
 
         /* ---------- Surtidores ---------- */
@@ -241,11 +245,15 @@ final class Inventario
                 self::revisarSurtidor($b['surtidorId']);
                 $nuevo = false;
                 if (!empty($b['insumoId'])) {
-                    $ins = Db::uno('SELECT * FROM insumos WHERE id = ? LIMIT 1 FOR UPDATE', [$b['insumoId']]);
+                    $ins = Db::uno('SELECT * FROM insumos WHERE id = ? AND activo = 1 LIMIT 1 FOR UPDATE', [$b['insumoId']]);
                     if (!$ins) throw new HttpError(400, 'El insumo no existe');
                 } else {
                     $n = $b['nuevoInsumo'];
                     $ins = Db::uno('SELECT * FROM insumos WHERE nombre = ? LIMIT 1 FOR UPDATE', [$n['nombre']]);
+                    if ($ins && !(int) $ins['activo']) {
+                        Db::ejecutar('UPDATE insumos SET activo = 1 WHERE id = ?', [$ins['id']]);
+                        $ins['activo'] = 1;
+                    }
                     if (!$ins) {
                         $nid = Db::insertar('insumos', [
                             'nombre' => $n['nombre'], 'tipo' => $n['tipo'], 'unidad' => ($n['unidad'] ?? '') ?: $b['unidad'],
@@ -271,6 +279,22 @@ final class Inventario
                 return $cid;
             });
             return Respuesta::con(201, self::aCompra(Db::uno(self::COMPRAS . ' WHERE c.id = ? LIMIT 1', [$id])));
+        });
+
+        $r->delete('/api/compras/:id', function (Request $req, array $p) {
+            Auth::rol($req, 'cocina');
+            $id = Z::idUrl($p);
+            Db::tx(function () use ($req, $id) {
+                $c = Db::uno(self::COMPRAS . ' WHERE c.id = ? LIMIT 1 FOR UPDATE', [$id]);
+                if (!$c) throw new HttpError(404, 'Compra no encontrada');
+                $ins = Db::uno('SELECT * FROM insumos WHERE id = ? FOR UPDATE', [$c['insumo_id']]);
+                $resta = Unidades::cv($c['cantidad'], $c['unidad'], $ins['unidad']);
+                Db::ejecutar('UPDATE insumos SET stock = GREATEST(0, ROUND(stock - ?, 3)),
+                    stock_referencia = GREATEST(0, ROUND(stock_referencia - ?, 3)) WHERE id = ?', [$resta, $resta, $ins['id']]);
+                Db::ejecutar('DELETE FROM compras WHERE id = ?', [$id]);
+                Bitacora::registrar($req, 'Borró la compra de ' . Z::jsNum(Fmt::num($c['cantidad'])) . " {$c['unidad']} de {$c['insumo_nombre']} (#$id)");
+            });
+            return ['ok' => true];
         });
 
         // r.use(['/insumos', '/surtidores', '/compras'], requireRole('cocina')): el resto de esas rutas pide rol antes del 404.
