@@ -75,8 +75,19 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
         run: |
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          # Acepta la llave pegada con saltos de Windows, con espacios al borde o en una sola línea.
+          printf '%s' "$SSH_KEY" | tr -d '\r' | python3 -c '
+          import re, sys
+          t = sys.stdin.read().strip()
+          m = re.search(r"-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----", t, re.S)
+          if not m:
+              sys.exit("SSH_KEY no tiene el formato BEGIN/END")
+          cuerpo = re.sub(r"\s+", "", m.group(2))
+          lineas = [cuerpo[i:i + 70] for i in range(0, len(cuerpo), 70)]
+          print("-----BEGIN %s-----\n%s\n-----END %s-----" % (m.group(1), "\n".join(lineas), m.group(1)))
+          ' > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null
           ssh-keyscan -T 10 -p "$SSH_PORT" "$SSH_HOST" >> "$HOME/.ssh/known_hosts"
 
       - name: Subir public_html
