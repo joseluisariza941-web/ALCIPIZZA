@@ -90,18 +90,25 @@ final class Puntos
         $id = (int) $pedido['id'];
         $canjeados = (int) $pedido['puntos_canjeados'];
         $ganados = (int) $pedido['puntos_ganados'];
-        if ($canjeados > 0) self::mover($pedido['celular'], $id, 'devuelto', $canjeados);
+        if ($canjeados > 0) self::devolverCanje($pedido, true);
         if ($ganados > 0) {
             self::mover($pedido['celular'], $id, 'revertido', -$ganados);
             Db::ejecutar('UPDATE pedidos SET puntos_ganados = 0 WHERE id = ?', [$id]);
         }
     }
 
-    /** Devuelve los puntos canjeados de un pedido que se va a re-liquidar (edición). Dentro de Db::tx. */
-    public static function devolverCanje(array $pedido): void
+    /**
+     * Devuelve al saldo los puntos canjeados y deja el pedido sin canje (puntos y descuento en 0), para que no se
+     * reembolsen otra vez. Con $restaurarTotal, el total vuelve a ser el de antes del canje. Dentro de Db::tx.
+     */
+    public static function devolverCanje(array $pedido, bool $restaurarTotal = false): void
     {
-        if (!empty($pedido['celular']) && (int) $pedido['puntos_canjeados'] > 0) {
-            self::mover($pedido['celular'], (int) $pedido['id'], 'devuelto', (int) $pedido['puntos_canjeados']);
-        }
+        $puntos = (int) $pedido['puntos_canjeados'];
+        if (empty($pedido['celular']) || $puntos <= 0) return;
+        $id = (int) $pedido['id'];
+        $n = Db::ejecutar('UPDATE pedidos SET ' . ($restaurarTotal ? 'total = total + descuento_puntos, ' : '')
+            . 'puntos_canjeados = 0, descuento_puntos = 0 WHERE id = ? AND puntos_canjeados > 0', [$id]);
+        if (!$n) return;
+        self::mover($pedido['celular'], $id, 'devuelto', $puntos);
     }
 }

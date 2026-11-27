@@ -9,7 +9,7 @@ import { db } from '../db.js';
  */
 export const testApp = (opts = {}) => {
   const b = Number(process.env.ALCI_PORT_BASE || 3100);
-  return `http://127.0.0.1:${b + (opts.loginMax ? 2 : opts.pedidosWebMax ? 3 : 1)}`;
+  return `http://127.0.0.1:${b + (opts.loginMax ? 2 : opts.pedidosWebMax ? 3 : opts.csrfMax ? 4 : 1)}`;
 };
 
 /** Deja a un usuario listo para entrar con la clave indicada (sin cambio obligatorio, sin bloqueo). */

@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useCarga } from './hooks.js';
 import { fd, money } from './util.js';
 import { filasSurtidores, validarSurtidor } from './surtidores.js';
-import { toast, toastError } from './toast.js';
+import { aviso, exito, toastError } from './toast.js';
 import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 
 const VACIO = { nombre: '', empresa: '', correo: '', telefono: '' };
@@ -37,19 +37,19 @@ export default function Surtidores() {
 
   async function crear() {
     const r = validarSurtidor(f);
-    if (r.error) return toast(r.error);
-    try { await api.post('/api/surtidores', r.body); setF(VACIO); sur.recargar(); } catch (e) { toastError(e); }
+    if (r.error) return aviso(r.error);
+    try { await api.post('/api/surtidores', r.body); setF(VACIO); sur.recargar(); exito('Surtidor creado'); } catch (e) { toastError(e); }
   }
   async function editar(z, cambio) {
     const { nombre, empresa, correo, telefono } = z;
     const body = { nombre, empresa: empresa || '', correo: correo || '', telefono: telefono || '', ...cambio };
-    if (!body.nombre.trim()) { toast('Escribe el nombre del surtidor'); return sur.recargar(); }
-    try { await api.put(`/api/surtidores/${z.id}`, body); } catch (e) { toastError(e); }
+    if (!body.nombre.trim()) { aviso('Escribe el nombre del surtidor'); return sur.recargar(); }
+    try { await api.put(`/api/surtidores/${z.id}`, body); exito('Surtidor guardado'); } catch (e) { toastError(e); }
     sur.recargar();
   }
   async function borrar(z) {
     if (!confirm(textoOcultar('este surtidor'))) return;
-    try { await api.del(`/api/surtidores/${z.id}`); } catch (e) { toastError(e); }
+    try { await api.del(`/api/surtidores/${z.id}`); exito('Surtidor eliminado'); } catch (e) { toastError(e); }
     sur.recargar();
   }
   const campo = k => ({ value: f[k], onChange: e => setF({ ...f, [k]: e.target.value }) });

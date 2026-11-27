@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { useCarga } from './hooks.js';
 import { fd } from './util.js';
 import { validarCambioMesera, validarMesera } from './personal.js';
@@ -27,6 +28,9 @@ function Fila({ m, onCambio, onQuitar }) {
 
 /** Pestaña Personal: meseras (/api/usuarios) y bitácora (ku original). */
 export default function Personal() {
+  const { user } = useAuth() || {};
+  const esSuper = user?.rol === 'superadmin';
+  const [rol, setRol] = useState('mesera');
   const us = useCarga('/api/usuarios', /** @type {any[]} */ ([]));
   const bi = useCarga('/api/bitacora?limit=200', /** @type {any[]} */ ([]));
   const meseras = us.data.filter(u => u.rol === 'mesera');
@@ -34,7 +38,7 @@ export default function Personal() {
   const recargar = () => { us.recargar(); bi.recargar(); };
 
   async function crear() {
-    const r = validarMesera(f, us.data);
+    const r = validarMesera(f, us.data, esSuper ? rol : 'mesera');
     if (r.error) return toast(r.error);
     try { await api.post('/api/usuarios', r.body); setF(VACIA); } catch (e) { toastError(e); }
     recargar();
@@ -64,7 +68,15 @@ export default function Personal() {
           <input placeholder="Nombre" {...campo('nombre')} />
           <input placeholder="Usuario" {...campo('usuario')} />
           <input type="password" autoComplete="new-password" placeholder="Contraseña" {...campo('clave')} />
-          <button className="btn" onClick={crear}>Agregar mesera</button>
+          {esSuper && (
+            <select aria-label="Rol" value={rol} onChange={e => setRol(e.target.value)}>
+              <option value="mesera">Mesera</option>
+              <option value="cocina">Cocina</option>
+              <option value="dev">Desarrollador</option>
+              <option value="superadmin">Superadmin</option>
+            </select>
+          )}
+          <button className="btn" onClick={crear}>{esSuper && rol !== 'mesera' ? 'Agregar usuario' : 'Agregar mesera'}</button>
         </div>
       </div>
       <h2>Ingresos y acciones del personal</h2>

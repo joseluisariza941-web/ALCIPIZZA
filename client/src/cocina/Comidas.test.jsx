@@ -75,7 +75,7 @@ describe('Comidas: platos y bebidas', () => {
     expect(cuerpo(f, 'POST', '/api/admin/platos')).toEqual({
       nombre: 'Hamburguesa', emoji: '🍽️', categoria: 'Hamburguesas', imagenUrl: '',
       variantes: [{ nombre: 'Sencilla', precio: 12000, multiplicador: 1 }],
-      ingredientes: [{ insumoId: 2, cantidad: 0.15, unidad: 'kg' }], salsas: ['Ketchup'], extras: [4],
+      ingredientes: [{ insumoId: 2, cantidad: 0.15, unidad: 'kg' }], salsas: [3], extras: [4],
     });
     await vi.waitFor(() => expect(screen.queryByRole('heading', { name: 'Nuevo plato' })).toBeNull());
   });
@@ -122,7 +122,7 @@ describe('Comidas: platos y bebidas', () => {
     await userEvent.type(precio, '17000');
     await userEvent.click(md.getByRole('button', { name: 'Guardar' }));
     expect(cuerpo(f, 'PUT', '/api/admin/platos/1')).toMatchObject({
-      nombre: 'Pizza', variantes: [{ id: 1, nombre: 'Pequeña', precio: 17000, multiplicador: 1 }], salsas: ['Ketchup'], extras: [4],
+      nombre: 'Pizza', variantes: [{ id: 1, nombre: 'Pequeña', precio: 17000, multiplicador: 1 }], salsas: [3], extras: [4],
     });
   });
 

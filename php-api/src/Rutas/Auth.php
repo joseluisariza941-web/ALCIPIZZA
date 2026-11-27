@@ -29,8 +29,12 @@ final class Auth
 
     public static function registrar(Router $r): void
     {
-        $r->get('/api/auth/csrf', function () {
-            if (!Sesion::get('csrfToken')) Sesion::set('csrfToken', Csrf::nuevoToken());
+        $r->get('/api/auth/csrf', function (Request $req) {
+            if (!Sesion::get('csrfToken')) {
+                // solo cuenta cuando se crea una sesión nueva
+                RateLimit::exigir('csrf', max(1, (int) env('CSRF_MAX', '60')), 60, $req->ip, 'Demasiadas peticiones. Espera un momento.');
+                Sesion::set('csrfToken', Csrf::nuevoToken());
+            }
             return ['csrfToken' => Sesion::get('csrfToken')];
         });
 
@@ -99,11 +103,12 @@ final class Auth
         $z->fin();
 
         $u = Usuarios::porUsuario($usuario);
-        if ($u && (int) $u['bloqueado']) throw new HttpError(423, self::MSG_BLOQUEO, 'BLOQUEADO');
-
         $ok = password_verify($clave, $u['clave_hash'] ?? Usuarios::hashFalso());
+        // cuenta bloqueada: con clave incorrecta se responde como cualquier credencial mala (sin delatar el bloqueo)
+        $bloqueado = $u && (int) $u['bloqueado'];
+        if ($bloqueado && $ok) throw new HttpError(423, self::MSG_BLOQUEO, 'BLOQUEADO');
         if (!$u || !$ok || !(int) $u['activo']) {
-            if ($u) {
+            if ($u && !$bloqueado) {
                 Db::ejecutar('UPDATE usuarios SET intentos_fallidos = intentos_fallidos + 1 WHERE id = ?', [(int) $u['id']]);
                 $n = (int) Db::valor('SELECT intentos_fallidos FROM usuarios WHERE id = ?', [(int) $u['id']]);
                 if ($n >= self::MAX_FALLOS) {
@@ -111,13 +116,12 @@ final class Auth
                         . self::BLOQUEO_MIN . ' MINUTE WHERE id = ?', [(int) $u['id']]);
                     Bitacora::registrar($req, 'Usuario bloqueado ' . self::BLOQUEO_MIN . ' min por ' . self::MAX_FALLOS
                         . ' intentos fallidos', $u);
-                    throw new HttpError(423, self::MSG_BLOQUEO, 'BLOQUEADO');
                 }
             }
             throw new HttpError(401, self::MSG_MALO);
         }
 
-        if ($u['rol'] !== 'dev' && !Suscripcion::activa()) {
+        if (!Acceso::tieneRol($u, 'dev') && !Suscripcion::activa()) {
             throw new HttpError(403, 'El servicio está suspendido. Contacta al desarrollador.', 'SUSPENDIDO');
         }
 

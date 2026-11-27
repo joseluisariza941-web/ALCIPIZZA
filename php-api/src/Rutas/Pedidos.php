@@ -54,11 +54,17 @@ final class Pedidos
         Db::tx(function () use ($req, $id, $b, $destino, $cliente, $user, $items, $subtotal) {
             $a = Db::uno('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [$id]);
             if (!$a || $a['estado'] !== 'nuevo') throw new HttpError(409, 'El pedido ya está en preparación y no se puede editar', 'NO_EDITABLE');
-            if ($cliente && $a['pago_estado'] === 'pagado') throw new HttpError(409, 'El pedido ya está pagado y no se puede editar', 'NO_EDITABLE');
+            if ($a['pago_estado'] === 'pagado') {
+                if ($cliente) throw new HttpError(409, 'El pedido ya está pagado y no se puede editar', 'NO_EDITABLE');
+                throw new HttpError(409, 'El pedido ya está pagado y no se puede editar', 'PEDIDO_PAGADO');
+            }
             P::devolverInventario($id);
             Puntos::devolverCanje($a);
-            $celular = $b['celular'] ?? $a['celular'];
-            $l = P::liquidar($items, $subtotal, $b['canjearPuntos'] ?? (int) $a['puntos_canjeados'], $celular);
+            // el canje se hace en caja: el cliente no lo cambia ni cambia el celular al que pertenece
+            $congelado = $cliente && (int) $a['puntos_canjeados'] > 0;
+            $celular = $congelado ? $a['celular'] : ($b['celular'] ?? $a['celular']);
+            $canje = $cliente ? (int) $a['puntos_canjeados'] : ($b['canjearPuntos'] ?? (int) $a['puntos_canjeados']);
+            $l = P::liquidar($items, $subtotal, $canje, $celular);
             Db::actualizar('pedidos', [...$destino, 'celular' => $celular, ...P::columnasLiquidacion($l)], 'id = ?', [$id]);
             Db::ejecutar('UPDATE pedidos SET editado_en = NOW() WHERE id = ?', [$id]);
             if ($l['puntosCanjeados'] > 0) Puntos::debitar($celular, $l['puntosCanjeados'], $id);
@@ -78,7 +84,7 @@ final class Pedidos
             $u = Auth::cargar($req);
             if ($u) {
                 Auth::revisar($req);
-                if (!in_array($u['rol'], ['mesera', 'cocina'], true)) {
+                if (!Auth::tieneRol($u, 'mesera', 'cocina')) {
                     throw new HttpError(403, 'Este usuario no puede crear pedidos', 'PROHIBIDO');
                 }
             }
@@ -143,7 +149,7 @@ final class Pedidos
                 $permitido = hash_equals((string) $fila['token_hash'], hash('sha256', $token));
             } elseif ($fila && $token === '') {
                 $u = Auth::cargar($req);
-                if ($u && in_array($u['rol'], ['cocina', 'mesera'], true)) { Auth::revisar($req); $permitido = true; }
+                if ($u && Auth::tieneRol($u, 'cocina', 'mesera')) { Auth::revisar($req); $permitido = true; }
             }
             if (!$permitido) throw new HttpError(404, 'Pedido no encontrado');
             return P::cargarPedido($id);
@@ -165,7 +171,9 @@ final class Pedidos
         // Cotización sin guardar: mismo cálculo que el pedido (promoción y puntos).
         $r->post('/api/pedidos/cotizar', function (Request $req) {
             if (!Sesion::get('userId')) RateLimit::exigir('cotizar', 120, 60, $req->ip, 'Demasiadas consultas. Espera un momento.');
-            $b = P::validar($req->body);
+            // Cotizar solo necesita los items: el destino se elige al enviar el pedido.
+            $cuerpo = is_array($req->body) ? $req->body + ['destino' => 'cotizacion'] : $req->body;
+            $b = P::validar($cuerpo);
             if (!Sesion::get('userId')) self::soloCaja($b);
             ['items' => $items, 'total' => $subtotal] = P::cotizar($b['items']);
             $l = P::liquidar($items, $subtotal, $b['canjearPuntos'] ?? 0, $b['celular'] ?? null);
@@ -184,6 +192,7 @@ final class Pedidos
             Db::tx(function () use ($req, $id) {
                 $a = Db::uno('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [$id]);
                 if (!$a || $a['estado'] !== 'nuevo') throw new HttpError(409, 'El pedido ya está en preparación y no se puede cancelar', 'NO_EDITABLE');
+                if ($a['pago_estado'] === 'pagado') throw new HttpError(409, 'El pedido ya está pagado y no se puede cancelar', 'NO_EDITABLE');
                 Db::ejecutar("UPDATE pedidos SET estado = 'cancelado', cancelado_por_cliente = 1 WHERE id = ?", [$id]);
                 P::devolverInventario($id);
                 Puntos::alCancelar($a);
@@ -223,12 +232,16 @@ final class Pedidos
                 }
             }
             Db::tx(function () use ($req, $id, $estado, $actual) {
-                // la condición sobre el estado anterior evita carreras (p. ej. cancelar justo cuando cocina lo toma)
-                $n = Db::actualizar('pedidos', ['estado' => $estado], 'id = ? AND estado = ?', [$id, $actual['estado']]);
-                if (!$n && $actual['estado'] !== $estado) throw new HttpError(409, 'El pedido cambió de estado; recarga e intenta de nuevo');
-                if ($n && $estado === 'cancelado' && $actual['estado'] !== 'cancelado') Puntos::alCancelar($actual);
+                // se relee con bloqueo: dos cambios simultáneos no ven la misma fila ni reembolsan dos veces
+                $a = Db::uno('SELECT * FROM pedidos WHERE id = ? FOR UPDATE', [$id]);
+                if (!$a) throw new HttpError(404, 'Pedido no encontrado');
+                if ($a['estado'] !== $actual['estado'] && $a['estado'] !== $estado) {
+                    throw new HttpError(409, 'El pedido cambió de estado; recarga e intenta de nuevo');
+                }
+                $n = Db::actualizar('pedidos', ['estado' => $estado], 'id = ? AND estado = ?', [$id, $a['estado']]);
+                if ($n && $estado === 'cancelado' && $a['estado'] !== 'cancelado') Puntos::alCancelar($a);
                 if (in_array($estado, self::DESCUENTAN, true)) P::descontarInventario($id);
-                Bitacora::registrar($req, "Pedido #$id: {$actual['estado']} → $estado");
+                Bitacora::registrar($req, "Pedido #$id: {$a['estado']} → $estado");
             });
             return P::cargarPedido($id);
         });

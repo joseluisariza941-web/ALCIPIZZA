@@ -13,7 +13,7 @@ final class Puntos
     {
         // Público: solo devuelve el saldo del celular consultado (nunca nombre ni movimientos).
         $r->get('/api/public/puntos/:celular', function (Request $req, array $params) {
-            RateLimit::exigir('puntos-saldo', max(1, (int) env('PUNTOS_SALDO_MAX', '30')), 600, $req->ip, 'Demasiadas consultas. Espera unos minutos.');
+            RateLimit::exigir('puntos-saldo', max(1, (int) env('PUNTOS_SALDO_MAX', '10')), 600, $req->ip, 'Demasiadas consultas. Espera unos minutos.');
             $cel = Pt::normalizar(urldecode((string) $params['celular']));
             $a = Pt::ajustes();
             return ['celular' => $cel, 'activo' => $a['activo'], 'saldo' => Pt::saldo($cel),

@@ -77,6 +77,10 @@ async function usuarios(knex) {
     { rol: 'cocina', usuario: process.env.ADMIN_USER || 'admin', clave: process.env.ADMIN_PASS, nombre: 'Administración cocina' },
     { rol: 'mesera', usuario: process.env.MESERA_USER || 'ana', clave: process.env.MESERA_PASS, nombre: 'Ana' },
   ];
+  // El superadmin solo se crea si se define SUPERADMIN_PASS.
+  if (process.env.SUPERADMIN_PASS) {
+    iniciales.push({ rol: 'superadmin', usuario: process.env.SUPERADMIN_USER || 'superadmin', clave: process.env.SUPERADMIN_PASS, nombre: 'Superadministrador' });
+  }
   for (const u of iniciales) {
     const usuario = u.usuario.trim().toLowerCase();
     if (await knex('usuarios').where({ usuario }).first('id')) continue;

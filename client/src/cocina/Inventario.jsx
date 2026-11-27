@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useCarga } from './hooks.js';
 import { fd, fmtStock, money, nivel, stockBajo } from './util.js';
 import { filtrarCompras, nombreSurtidor, surtidorCompra, totalInvertido, ultimaCompra, validarCompra } from './inventario.js';
-import { toast, toastError } from './toast.js';
+import { aviso, exito, toastError } from './toast.js';
 import SelectUnidad from './SelectUnidad.jsx';
 import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 
@@ -87,7 +87,7 @@ export default function Inventario() {
 
   async function onBorrar(x) {
     if (!confirm(textoOcultar(`"${x.nombre}" del inventario`))) return;
-    try { await api.del(`/api/insumos/${x.id}`); setEnUso(null); } catch (e) {
+    try { await api.del(`/api/insumos/${x.id}`); setEnUso(null); exito('Insumo eliminado'); } catch (e) {
       if (e?.status === 409 && e.data?.code === 'EN_USO') setEnUso({ x, detalles: e.data.detalles ?? [] });
       else toastError(e);
     }
@@ -99,7 +99,7 @@ export default function Inventario() {
     const { x, detalles } = enUso;
     const platos = [...new Set(detalles.map(d => d.plato))].join(', ');
     if (!confirm(`Se quitará "${x.nombre}" de las recetas de: ${platos}. Esos platos dejarán de descontarlo del inventario y el insumo se ocultará (se puede restaurar). ¿Continuar?`)) return;
-    try { await api.del(`/api/insumos/${x.id}?forzar=1`); setEnUso(null); } catch (e) { toastError(e); }
+    try { await api.del(`/api/insumos/${x.id}?forzar=1`); setEnUso(null); exito('Insumo eliminado'); } catch (e) { toastError(e); }
     recargarTodo();
   }
 
@@ -107,17 +107,17 @@ export default function Inventario() {
     if (!confirm(`¿Anular esta compra de ${c.insumo?.nombre ?? 'producto'}?
 
 Se resta del stock. Queda en "Ver anuladas" y se puede restaurar.`)) return;
-    try { await api.del(`/api/compras/${c.id}`); toast('Compra anulada'); } catch (e) { toastError(e); }
+    try { await api.del(`/api/compras/${c.id}`); exito('Compra anulada'); } catch (e) { toastError(e); }
     recargarTodo();
   }
 
   async function compra() {
     const r = validarCompra(f, ins.data);
-    if ('error' in r) return toast(r.error);
+    if ('error' in r) return aviso(r.error);
     try {
       await api.post('/api/compras', r.body);
       setF(VACIO);
-      toast(r.nuevo ? 'Producto creado y guardado' : 'Ingreso guardado');
+      exito(r.nuevo ? 'Producto creado y guardado' : 'Ingreso guardado');
     } catch (e) { toastError(e); }
     recargarTodo();
   }

@@ -110,3 +110,18 @@ html[data-p=vinotinto] :is(.st,.bd,.pl:not(.ig2),.chip:not(.off),.btn.y,.dr.hoy)
 .stars{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.4rem;margin:1rem 0 1.4rem}.star{text-align:center;padding:1.2rem}.star h3{font-size:1.7rem;margin:.7rem 0 .2rem}.star .pim{height:240px}
 @media print{body>*:not(.md){display:none}.md{position:static;background:none}.no{display:none!important}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-iteration-count:1!important;transition:none!important}}
+
+/* Alertas (components/Alertas.jsx) */
+.alertas{position:fixed;top:1rem;right:1rem;z-index:80;display:flex;flex-direction:column;gap:.6rem;width:min(360px,calc(100vw - 2rem));pointer-events:none}
+.alerta{pointer-events:auto;display:flex;align-items:flex-start;gap:.6rem;background:var(--card);color:var(--ink);border:3px solid var(--ln);border-left-width:10px;border-radius:12px;padding:.55rem .6rem .55rem .7rem;box-shadow:4px 4px 0 var(--ln);font-weight:700;animation:alerta-in .18s ease-out}
+.alerta-t{flex:1;overflow-wrap:anywhere}
+.alerta-i{flex:none;width:1.4rem;height:1.4rem;border-radius:50%;display:grid;place-items:center;font-size:.85rem;font-weight:800;color:#fff;border:2px solid var(--ln)}
+.alerta-exito{border-left-color:#2E8B1F}.alerta-exito .alerta-i{background:#2E8B1F}
+.alerta-error{border-left-color:#C62828}.alerta-error .alerta-i{background:#C62828}
+.alerta-info{border-left-color:#1565D8}.alerta-info .alerta-i{background:#1565D8}
+.alerta-aviso{border-left-color:#E08A00}.alerta-aviso .alerta-i{background:#E08A00}
+.alerta-x{flex:none;background:none;border:0;color:inherit;font-size:1.3rem;line-height:1;cursor:pointer;padding:0 .2rem;opacity:.7}
+.alerta-x:hover,.alerta-x:focus-visible{opacity:1}
+@keyframes alerta-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (max-width:600px){.alertas{top:auto;right:auto;bottom:1rem;left:50%;transform:translateX(-50%);flex-direction:column-reverse}}
+.aviso-login{margin-top:1rem;padding:.6rem .8rem;border:3px solid var(--ln);border-left:10px solid #C62828;border-radius:12px;background:var(--card);color:var(--ink);font-weight:700}

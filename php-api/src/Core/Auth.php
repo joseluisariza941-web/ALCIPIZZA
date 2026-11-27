@@ -25,7 +25,7 @@ final class Auth
     {
         $u = $req->user;
         if (!$u) throw new HttpError(401, 'Inicia sesión para continuar');
-        if ($u['rol'] !== 'dev' && !Suscripcion::activa()) {
+        if (!self::tieneRol($u, 'dev') && !Suscripcion::activa()) {
             throw new HttpError(403, 'El servicio está suspendido. Contacta al desarrollador.', 'SUSPENDIDO');
         }
         if ((int) $u['debe_cambiar_clave'] && !$permitirCambioPendiente) {
@@ -41,11 +41,17 @@ final class Auth
         return $req->user;
     }
 
-    /** Exige sesión y uno de los roles ('dev', 'cocina', 'mesera'); devuelve el usuario. */
+    /** El superadmin suma dev y cocina: pasa cualquier revisión de rol. */
+    public static function tieneRol(array $u, string ...$roles): bool
+    {
+        return $u['rol'] === 'superadmin' || in_array($u['rol'], $roles, true);
+    }
+
+    /** Exige sesión y uno de los roles ('dev', 'cocina', 'mesera'; 'superadmin' pasa siempre); devuelve el usuario. */
     public static function rol(Request $req, string ...$roles): array
     {
         $u = self::requerir($req);
-        if (!in_array($u['rol'], $roles, true)) throw new HttpError(403, 'No tienes permiso para esto', 'PROHIBIDO');
+        if (!self::tieneRol($u, ...$roles)) throw new HttpError(403, 'No tienes permiso para esto', 'PROHIBIDO');
         return $u;
     }
 }

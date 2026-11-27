@@ -7,6 +7,16 @@ export class ApiError extends Error {
 
 let csrf = null;
 
+const PANELES = ['/cocina', '/mesera', '/dev'];
+
+/** Un 401 fuera del login: la sesión venció. Se deja el aviso y se lleva al personal al login. */
+function sesionExpirada() {
+  const ruta = globalThis.location?.pathname || '';
+  if (!PANELES.some(p => ruta === p || ruta.startsWith(p + '/'))) return;
+  try { sessionStorage.setItem('alci:sesion-expirada', '1'); } catch { /* almacenamiento bloqueado */ }
+  globalThis.location.assign('/personal');
+}
+
 async function csrfToken() {
   if (!csrf) csrf = (await request('GET', '/api/auth/csrf')).csrfToken;
   return csrf;
@@ -32,6 +42,7 @@ async function request(method, path, body, reintento = true) {
       resetCsrf(); // el token venció (p. ej. la sesión se renovó): uno nuevo y un solo reintento
       if (reintento) return request(method, path, body, false);
     }
+    if (res.status === 401 && !path.startsWith('/api/auth/')) sesionExpirada();
     throw new ApiError(res.status, data?.error || `Error ${res.status}`, data);
   }
   return data;

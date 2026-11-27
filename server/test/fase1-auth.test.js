@@ -91,7 +91,7 @@ describe('Fase 1 · login', () => {
   it('bloquea al usuario 15 min tras 5 fallos (423), aunque luego ponga la clave correcta', async () => {
     const a = await agente(app);
     for (let i = 0; i < 4; i++) await send(a, 'post', '/api/auth/login', { usuario: 'ana', clave: 'mala' }).expect(401);
-    await send(a, 'post', '/api/auth/login', { usuario: 'ana', clave: 'mala' }).expect(423);
+    await send(a, 'post', '/api/auth/login', { usuario: 'ana', clave: 'mala' }).expect(401);
     const res = await send(a, 'post', '/api/auth/login', { usuario: 'ana', clave: 'Ana-Prueba-123' }).expect(423);
     expect(res.body.error).toMatch(/bloquead/i);
     const u = await db('usuarios').where({ usuario: 'ana' }).first();

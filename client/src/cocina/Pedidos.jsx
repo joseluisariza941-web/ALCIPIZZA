@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../api.js';
 import { usePublicConfig } from '../components/ConfigContext.jsx';
 import { botonEstado, hora, money, siguienteEstado, waLink } from './util.js';
-import { toastError } from './toast.js';
+import { exito, toastError } from './toast.js';
 import CobroModal from '../personal/CobroModal.jsx';
 import EtiquetasPedido from '../personal/EtiquetasPedido.jsx';
 import WaIcon from './WaIcon.jsx';
@@ -66,7 +66,7 @@ export default function Pedidos({ pedidos, recargar }) {
 
   async function onEstado(o, estado) {
     if (estado === 'cancelado' && !confirm(`¿Cancelar el pedido #${o.id}?`)) return;
-    try { await api.patch(`/api/pedidos/${o.id}/estado`, { estado }); } catch (e) { toastError(e); }
+    try { await api.patch(`/api/pedidos/${o.id}/estado`, { estado }); exito('Pedido actualizado'); } catch (e) { toastError(e); }
     await recargar();
   }
   const onWa = o => open(waLink(o, cfg), '_blank');

@@ -7,12 +7,13 @@ const REPETIDO = 'Datos incompletos o usuario repetido';
  * Valida una mesera nueva (addMes original). La API exige clave ≥ 8.
  * @param {{nombre?:string, usuario?:string, clave?:string}} f
  * @param {{usuario:string}[]} existentes
+ * @param {'mesera'|'cocina'|'dev'|'superadmin'} [rol] solo lo elige un superadmin
  */
-export function validarMesera(f, existentes) {
+export function validarMesera(f, existentes, rol = 'mesera') {
   const nombre = (f.nombre || '').trim(), usuario = (f.usuario || '').trim().toLowerCase(), clave = f.clave || '';
   if (!nombre || !usuario || !clave || existentes.some(m => m.usuario.toLowerCase() === usuario)) return { error: REPETIDO };
   if (clave.length < 8) return { error: CORTA };
-  return { body: { nombre, usuario, clave, rol: 'mesera' } };
+  return { body: { nombre, usuario, clave, rol } };
 }
 
 /**

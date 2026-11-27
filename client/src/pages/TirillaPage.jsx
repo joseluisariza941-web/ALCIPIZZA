@@ -1,4 +1,4 @@
-﻿// Página "/tirilla/:id?token=...": tirilla del pedido del cliente, que se actualiza sola hasta entregarse.
+// Página "/tirilla/:id?token=...": tirilla del pedido del cliente, que se actualiza sola hasta entregarse.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -62,8 +62,9 @@ function Tirilla({ intervalo }) {
     setOcupado(true);
     try {
       setPedido(await api.post(`/api/pedidos/${id}/cancelar`, { token }));
+      toast('Pedido cancelado', 'exito');
     } catch (e) {
-      toast(e.message);
+      toast(e.message, 'error');
       if (e.status === 409) { try { await recargar(); } catch { /* sin conexión */ } }
     } finally {
       setOcupado(false);

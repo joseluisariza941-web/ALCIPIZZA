@@ -24,10 +24,11 @@ describe('login', () => {
   const err = (status, code) => new ApiError(status, 'x', code ? { code } : {});
   it('traduce cada error del login a un mensaje para el personal', () => {
     expect(mensajeErrorLogin(err(401))).toBe('Usuario o contraseña incorrectos');
-    expect(mensajeErrorLogin(err(423))).toMatch(/bloqueado temporalmente/i);
+    expect(mensajeErrorLogin(new ApiError(423, 'Error 423', {}))).toMatch(/bloqueada temporalmente/i);
+    expect(mensajeErrorLogin(err(423))).toBe('x');
     expect(mensajeErrorLogin(err(429))).toMatch(/demasiados intentos/i);
-    expect(mensajeErrorLogin(err(403, 'SUSPENDIDO'))).toBe('El servicio está suspendido. Contacta al desarrollador.');
-    expect(mensajeErrorLogin(new TypeError('fetch failed'))).toMatch(/no se pudo conectar/i);
+    expect(mensajeErrorLogin(err(403, 'SUSPENDIDO'))).toMatch(/suscripción.*inactiva/i);
+    expect(mensajeErrorLogin(new TypeError('fetch failed'))).toMatch(/sin conexión/i);
   });
 
   it('valida el cambio de contraseña obligatorio', () => {

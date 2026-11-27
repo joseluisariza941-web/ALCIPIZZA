@@ -55,6 +55,7 @@ export default function DevPage() {
     <Shell>
       <div data-testid="pagina-dev">
         <h2>Opciones de desarrollador</h2>
+        {user.rol === 'superadmin' && <a className="btn s" href="/cocina">Ir al panel de cocina</a>}
         <div className="card" style={{ margin: '1rem 0' }}>
           <h3>Suscripción anual</h3>
           {sub && <p style={{ margin: '.7rem 0' }}>
@@ -84,6 +85,14 @@ export default function DevPage() {
           {usuarios.filter(u => u.rol === 'mesera').map(fila)}
           <Agregar rol="mesera" texto="Agregar mesera" existentes={existentes} aviso={aviso} onCambio={cargarUsuarios} />
         </div>
+
+        {user.rol === 'superadmin' && [['dev', 'Desarrolladores', 'Agregar desarrollador'], ['superadmin', 'Superadministradores', 'Agregar superadministrador']].map(([rol, titulo, texto]) => (
+          <div className="card" style={{ marginTop: '1rem' }} key={rol}>
+            <h3>{titulo}</h3>
+            {usuarios.filter(u => u.rol === rol).map(fila)}
+            <Agregar rol={rol} texto={texto} existentes={existentes} aviso={aviso} onCambio={cargarUsuarios} />
+          </div>
+        ))}
       </div>
       {toast}
     </Shell>

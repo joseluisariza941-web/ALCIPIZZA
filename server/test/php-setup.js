@@ -20,7 +20,7 @@ export async function setup(ctx) {
   await base(ctx);
   const env = ctx.config.env;
   const b = Number(env.ALCI_PORT_BASE || 3100);
-  const servidores = [[b + 1, {}], [b + 2, { LOGIN_RATE_MAX: '3' }], [b + 3, { PEDIDOS_WEB_MAX: '2', TIRILLA_MOD_MAX: '3', PUNTOS_SALDO_MAX: '3' }]];
+  const servidores = [[b + 1, {}], [b + 2, { LOGIN_RATE_MAX: '3' }], [b + 3, { PEDIDOS_WEB_MAX: '2', TIRILLA_MOD_MAX: '3', PUNTOS_SALDO_MAX: '3' }], [b + 4, { CSRF_MAX: '3' }]];
   for (const [puerto, extra] of servidores) {
     const p = spawn('php', ['-S', `127.0.0.1:${puerto}`, '-t', 'public', 'public/dev-router.php'], {
       cwd: raiz, stdio: ['ignore', 'ignore', 'pipe'],
@@ -28,7 +28,7 @@ export async function setup(ctx) {
         ...process.env, ...env, APP_ENV: 'test', ALCI_ENV_FILE: path.join(raiz, '.env.test-inexistente'),
         DB_HOST: process.env.DB_HOST || '127.0.0.1', DB_PORT: process.env.DB_PORT || '3310',
         DB_USER: process.env.DB_USER || 'alcipizza', DB_PASSWORD: process.env.DB_PASSWORD || 'Alcipizza_Dev_2026',
-        LOGIN_RATE_MAX: '1000', PEDIDOS_WEB_MAX: '1000', TIRILLA_MOD_MAX: '1000', PUNTOS_SALDO_MAX: '1000', PHP_CLI_SERVER_WORKERS: '4', ...extra,
+        LOGIN_RATE_MAX: '1000', PEDIDOS_WEB_MAX: '1000', TIRILLA_MOD_MAX: '1000', PUNTOS_SALDO_MAX: '1000', CSRF_MAX: '1000', ALCI_LIMPIEZA: 'siempre', PHP_CLI_SERVER_WORKERS: '4', ...extra,
       },
     });
     p.stderr.on('data', d => {

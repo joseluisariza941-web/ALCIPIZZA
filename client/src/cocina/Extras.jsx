@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import SelectUnidad from './SelectUnidad.jsx';
 import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
 import { idsExtras, platoABody, validarExtra } from './platos.js';
-import { toast, toastError } from './toast.js';
+import { aviso, exito, toastError } from './toast.js';
 
 const nombreInsumo = (x, insumos) => insumos.find(i => i.id === x.insumoId)?.nombre ?? x.insumo?.nombre ?? '';
 const aForm = (x, insumos) => ({ nombre: x.nombre, insumo: nombreInsumo(x, insumos), cantidad: String(x.cantidad), unidad: x.unidad,
@@ -18,13 +18,13 @@ function FilaExtra({ x, insumos, platos, onCambio, onPlato }) {
   async function guardar(nf = f) {
     if (JSON.stringify(nf) === JSON.stringify(inicial)) return;
     const r = validarExtra(nf, insumos);
-    if ('error' in r) { setF(inicial); return toast(r.error); }
-    try { await api.put(`/api/admin/extras/${x.id}`, r.body); toast('Guardado'); } catch (e) { toastError(e); setF(inicial); }
+    if ('error' in r) { setF(inicial); return aviso(r.error); }
+    try { await api.put(`/api/admin/extras/${x.id}`, r.body); exito('Guardado'); } catch (e) { toastError(e); setF(inicial); }
     onCambio();
   }
   async function borrar() {
     if (!confirm(textoOcultar('este extra'))) return;
-    try { await api.del(`/api/admin/extras/${x.id}`); } catch (e) { toastError(e); }
+    try { await api.del(`/api/admin/extras/${x.id}`); exito('Extra eliminado'); } catch (e) { toastError(e); }
     onCambio();
   }
 
@@ -83,11 +83,12 @@ export default function Extras({ extras, platos, insumos, recargar }) {
 
   async function agregar() {
     const r = validarExtra(f, insumos);
-    if ('error' in r) return toast(r.error);
+    if ('error' in r) return aviso(r.error);
     try {
       const x = await api.post('/api/admin/extras', r.body);
       if (sel.length && x?.id != null) await onPlato(x.id, platos.filter(p => sel.includes(p.id)), true);
       setF(NUEVO); setSel([]);
+      exito('Extra creado');
     } catch (e) { toastError(e); }
     recargar();
   }

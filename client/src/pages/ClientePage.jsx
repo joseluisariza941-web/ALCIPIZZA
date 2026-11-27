@@ -1,4 +1,4 @@
-﻿// Página pública "/": bienvenida, horarios, menú, personalización, pre-ticket y envío del pedido (cliente() original).
+// Página pública "/": bienvenida, horarios, menú, personalización, pre-ticket y envío del pedido (cliente() original).
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
@@ -105,7 +105,7 @@ function Cliente() {
   useEffect(() => {
     let vivo = true;
     api.get('/api/menu').then(m => { if (vivo) setPlatos(Array.isArray(m) ? m : m?.platos || []); })
-      .catch(e => toast(e.message));
+      .catch(e => toast(e.message, 'error'));
     return () => { vivo = false; };
   }, []);
 
@@ -134,7 +134,7 @@ function Cliente() {
 
   const enviar = () => {
     const err = validarPedido(items, f);
-    if (err) return toast(err);
+    if (err) return toast(err, 'aviso');
     setConfirmar(true);
   };
 
@@ -148,15 +148,20 @@ function Cliente() {
         borrarEdicion();
         setEdicion(null);
         setItems([]);
+        toast('Pedido actualizado', 'exito');
         navigate(urlTirilla(r.id, edicion.token));
       } else {
         const r = await api.post('/api/pedidos', cuerpoPedido(items, f));
-        guardarTirilla({ id: r.pedido.id, token: r.token });
         setItems([]);
-        navigate(urlTirilla(r.pedido.id, r.token));
+        toast('Pedido enviado', 'exito');
+        // Con una sesión del personal abierta el pedido queda del personal y no trae tirilla.
+        if (r.token) {
+          guardarTirilla({ id: r.pedido.id, token: r.token });
+          navigate(urlTirilla(r.pedido.id, r.token));
+        }
       }
     } catch (e) {
-      toast(e.message);
+      toast(e.message, 'error');
       if (e.data?.code === 'NO_EDITABLE' && edicion) {
         const t = edicion;
         borrarEdicion();

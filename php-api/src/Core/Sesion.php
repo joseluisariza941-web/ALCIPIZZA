@@ -114,6 +114,12 @@ final class Sesion
         Db::ejecutar($sql, $p);
     }
 
+    /** Borra las sesiones vencidas (datos técnicos efímeros). */
+    public static function limpiarVencidas(): int
+    {
+        return Db::ejecutar('DELETE FROM sessions WHERE expires <= ?', [time()]);
+    }
+
     /** Id actual sin crearla (null si no hay). */
     public static function idActual(): ?string { return self::$id; }
 }

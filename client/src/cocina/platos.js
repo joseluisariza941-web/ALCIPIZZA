@@ -27,11 +27,13 @@ export function platoAForm(p) {
     variantes: (p.variantes || []).map(v => ({ id: v.id, nombre: v.nombre, precio: String(v.precio), multiplicador: String(v.multiplicador ?? 1) })),
     ingredientes: b ? [] : ing.map(g => ({ insumo: g.nombre, cantidad: String(g.cantidad), unidad: g.unidad })),
     bebidaInsumo: b ? (ing[0]?.nombre || '') : '',
-    extras: idsExtras(p), salsas: [...(p.salsas || [])],
+    extras: idsExtras(p), salsas: (p.salsas || []).map(nombreSalsa),
   };
 }
 
 const conId = (id, o) => (id != null ? { id, ...o } : o);
+/** La API entrega las salsas como {insumoId, nombre}; el formulario las maneja por nombre. */
+const nombreSalsa = s => (typeof s === 'string' ? s : s.nombre);
 
 /**
  * Valida el formulario del plato y arma el cuerpo para POST/PUT /api/admin/platos.
@@ -55,8 +57,14 @@ export function validarPlato(f, insumos) {
     if (!unidadesCompatibles(g.unidad, x.unidad)) return { error: `"${x.nombre}" se mide en ${x.unidad}: usa el mismo tipo de unidad` };
     ingredientes.push({ insumoId: x.id, cantidad: +g.cantidad, unidad: g.unidad });
   }
+  const salsas = [];
+  for (const n of beb ? [] : f.salsas) {
+    const x = porNombre(insumos, n);
+    if (!x) return { error: `La salsa "${n}" no existe en Inventario` };
+    salsas.push(x.id);
+  }
   return { body: { nombre, emoji: f.emoji || '🍽️', categoria, imagenUrl: f.imagenUrl || '', variantes, ingredientes,
-    salsas: beb ? [] : f.salsas, extras: f.extras } };
+    salsas, extras: f.extras } };
 }
 
 /** Cuerpo PUT de un plato existente cambiando solo los extras ofrecidos. */
@@ -65,7 +73,7 @@ export function platoABody(p, extras) {
     nombre: p.nombre, emoji: p.emoji, categoria: p.categoria, imagenUrl: p.imagenUrl || '',
     variantes: p.variantes.map(v => conId(v.id, { nombre: v.nombre, precio: v.precio, multiplicador: v.multiplicador ?? 1 })),
     ingredientes: (p.ingredientes || []).map(g => ({ insumoId: g.insumoId, cantidad: g.cantidad, unidad: g.unidad })),
-    salsas: p.salsas || [], extras,
+    salsas: (p.salsas || []).map(s => (typeof s === 'object' ? s.insumoId : s)), extras,
   };
 }
 

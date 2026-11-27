@@ -13,8 +13,8 @@ export const appRoutes = [
   <Route key="tirilla" path="/tirilla/:id" element={<TirillaPage />} />,
   <Route key="login" path="/personal" element={<LoginPage />} />,
   <Route key="mesera" path="/mesera/*" element={<RequireRole roles={['mesera']}><MeseraPage /></RequireRole>} />,
-  <Route key="cocina" path="/cocina/*" element={<RequireRole roles={['cocina']}><CocinaPage /></RequireRole>} />,
-  <Route key="dev" path="/dev/*" element={<RequireRole roles={['dev']}><DevPage /></RequireRole>} />,
+  <Route key="cocina" path="/cocina/*" element={<RequireRole roles={['cocina', 'superadmin']}><CocinaPage /></RequireRole>} />,
+  <Route key="dev" path="/dev/*" element={<RequireRole roles={['dev', 'superadmin']}><DevPage /></RequireRole>} />,
   <Route key="resto" path="*" element={<Navigate to="/" replace />} />,
 ];
 

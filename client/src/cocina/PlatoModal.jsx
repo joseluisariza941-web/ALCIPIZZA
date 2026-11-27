@@ -4,7 +4,7 @@ import { isBebida, money } from './util.js';
 import SelectUnidad from './SelectUnidad.jsx';
 import { platoAForm, validarPlato } from './platos.js';
 import { leerImagen } from './imagen.js';
-import { toast, toastError } from './toast.js';
+import { aviso, exito, toastError } from './toast.js';
 
 /**
  * Formulario de plato nuevo o existente (editP / saveP originales).
@@ -28,10 +28,11 @@ export default function PlatoModal({ plato, platos, extras, insumos, onCerrar, o
 
   async function guardar() {
     const r = validarPlato(f, insumos);
-    if ('error' in r) return toast(r.error);
+    if ('error' in r) return aviso(r.error);
     try {
       if (plato) await api.put(`/api/admin/platos/${plato.id}`, r.body);
       else await api.post('/api/admin/platos', r.body);
+      exito(plato ? 'Plato actualizado' : 'Plato creado');
       onGuardado();
     } catch (err) { toastError(err); }
   }

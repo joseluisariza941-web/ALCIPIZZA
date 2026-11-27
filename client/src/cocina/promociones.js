@@ -1,7 +1,7 @@
 // Lógica pura de la pestaña Promociones.
 export const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-const hoy = () => new Date().toISOString().slice(0, 10);
+const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /** Formulario vacío de una promoción. */
 export const promoVacia = () => ({ nombre: '', tipo: 'porcentaje', alcance: 'total', platoId: '', categoria: '', valor: '', montoMinimo: '',

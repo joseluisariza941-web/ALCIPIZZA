@@ -36,7 +36,7 @@ export const platos = [
   { id: 1, nombre: 'Pizza', emoji: '🍕', imagenUrl: '', categoria: 'Pizzas', activo: true,
     variantes: [{ id: 1, nombre: 'Pequeña', precio: 16000, multiplicador: 1 }],
     ingredientes: [{ insumoId: 1, nombre: 'Queso', cantidad: 100, unidad: 'g' }],
-    salsas: ['Ketchup'], extras: [{ id: 4, nombre: 'Queso extra', precio: 2000, grupo: null }] },
+    salsas: [{ insumoId: 3, nombre: 'Ketchup' }], extras: [{ id: 4, nombre: 'Queso extra', precio: 2000, grupo: null }] },
   { id: 2, nombre: 'Gaseosa', emoji: '🥤', imagenUrl: '', categoria: 'Bebidas', activo: true,
     variantes: [{ id: 2, nombre: 'Personal', precio: 3000, multiplicador: 1 }],
     ingredientes: [{ insumoId: 4, nombre: 'Gaseosa', cantidad: 1, unidad: 'und' }], salsas: [], extras: [] },

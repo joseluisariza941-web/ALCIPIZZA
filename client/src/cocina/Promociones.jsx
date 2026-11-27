@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import Modal from '../components/Modal.jsx';
 import { useCarga } from './hooks.js';
 import { DIAS, aForm, errorPromo, promoBody, promoVacia, resumenPromo } from './promociones.js';
-import { toast, toastError } from './toast.js';
+import { aviso, exito, toastError } from './toast.js';
 
 /** Formulario de una promoción (nueva o existente). */
 function Formulario({ promo, platos, categorias, onCerrar, onGuardado }) {
@@ -13,11 +13,11 @@ function Formulario({ promo, platos, categorias, onCerrar, onGuardado }) {
   const alternar = i => campo('dias', f.dias.includes(i) ? f.dias.filter(x => x !== i) : [...f.dias, i]);
 
   async function guardar() {
-    if (error) return toast(error);
+    if (error) return aviso(error);
     try {
       if (promo) await api.put(`/api/promociones/${promo.id}`, promoBody(f));
       else await api.post('/api/promociones', promoBody(f));
-      toast('✅ Promoción guardada');
+      exito('✅ Promoción guardada');
       onGuardado();
     } catch (e) { toastError(e); }
   }
@@ -101,11 +101,11 @@ export default function Promociones() {
 
   async function eliminar(p) {
     if (!confirm(`¿Eliminar la promoción ${p.nombre}?`)) return;
-    try { await api.del(`/api/promociones/${p.id}`); } catch (e) { toastError(e); }
+    try { await api.del(`/api/promociones/${p.id}`); exito('Promoción eliminada'); } catch (e) { toastError(e); }
     r.recargar();
   }
   async function restaurar(p) {
-    try { await api.post(`/api/promociones/${p.id}/restaurar`, {}); toast('Promoción restaurada'); } catch (e) { toastError(e); }
+    try { await api.post(`/api/promociones/${p.id}/restaurar`, {}); exito('Promoción restaurada'); } catch (e) { toastError(e); }
     r.recargar();
   }
 

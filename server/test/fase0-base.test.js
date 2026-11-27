@@ -11,7 +11,6 @@ describe('Fase 0 · base de datos y API', () => {
   it('GET /api/health confirma que MySQL responde', async () => {
     const res = await request(app).get('/api/health').expect(200);
     expect(res.body.ok).toBe(true);
-    expect(res.body.mysql).toMatch(/^8\./);
   });
 
   it('crea las tablas del esquema normalizado', async () => {

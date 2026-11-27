@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
@@ -14,7 +14,7 @@ const USUARIOS = [
 ];
 const FUTURO = new Date(Date.now() + 30 * 864e5).toISOString();
 
-function montar(rutas = {}, sub = { activa: true, hasta: FUTURO }) {
+function montar(rutas = {}, sub = { activa: true, hasta: FUTURO }, user = DEV) {
   const f = mockApi({
     'GET /api/auth/csrf': { csrfToken: 't' },
     'GET /api/public/config': { config: {}, pagos: [], abierto: true, suscripcionActiva: true },
@@ -23,7 +23,7 @@ function montar(rutas = {}, sub = { activa: true, hasta: FUTURO }) {
     'PUT /api/suscripcion': b => ({ activa: true, hasta: FUTURO, ...b }),
     ...rutas,
   });
-  const r = renderWith(<Routes><Route path="/dev/*" element={<DevPage />} /><Route path="/personal" element={<div>login</div>} /></Routes>, { route: '/dev', user: DEV });
+  const r = renderWith(<Routes><Route path="/dev/*" element={<DevPage />} /><Route path="/personal" element={<div>login</div>} /></Routes>, { route: '/dev', user });
   return { f, ...r, u: userEvent.setup() };
 }
 
@@ -177,5 +177,27 @@ describe('Paneles del personal con cambio de clave pendiente', () => {
     renderWith(<Routes><Route path="/dev/*" element={<DevPage />} /><Route path="/personal" element={<div>login</div>} /></Routes>,
       { route: '/dev', user: { ...DEV, debeCambiarClave: true } });
     expect(await screen.findByText('login')).toBeInTheDocument();
+  });
+});
+
+describe('DevPage · superadmin', () => {
+  const SUPER = { id: 9, usuario: 'super', nombre: 'Super', rol: 'superadmin', activo: true, debeCambiarClave: false };
+
+  it('el superadmin ve desarrolladores y superadministradores y puede agregarlos', async () => {
+    const { f, u } = montar({ 'GET /api/usuarios': [...USUARIOS, SUPER], 'POST /api/usuarios': b => ({ id: 20, ...b }) }, undefined, SUPER);
+    await screen.findByRole('group', { name: 'Super' });
+    expect(tarjeta('Desarrolladores').getByRole('group', { name: 'Desarrollador' })).toBeInTheDocument();
+    const t = tarjeta('Superadministradores');
+    await u.type(t.getAllByPlaceholderText('Nombre').at(-1), 'Otro');
+    await u.type(t.getAllByPlaceholderText('Usuario').at(-1), 'otro');
+    await u.type(t.getAllByPlaceholderText('Contraseña').at(-1), 'Clave_Segura_1');
+    await u.click(t.getByRole('button', { name: 'Agregar superadministrador' }));
+    await waitFor(() => expect(llamadas(f, 'POST', '/api/usuarios')[0]).toMatchObject({ usuario: 'otro', rol: 'superadmin' }));
+  });
+
+  it('un dev no ve esas secciones', async () => {
+    montar();
+    await screen.findByRole('group', { name: 'Ana' });
+    expect(screen.queryByRole('heading', { name: 'Superadministradores' })).not.toBeInTheDocument();
   });
 });

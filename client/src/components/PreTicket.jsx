@@ -32,12 +32,12 @@ export default function PreTicket({
   const total = cotizacion ? cotizacion.total : totalCarrito(items);
 
   const consultarPuntos = async () => {
-    if (!celularValido(f.celular)) return toast('Escribe un celular válido (10 dígitos que empiezan por 3)');
+    if (!celularValido(f.celular)) return toast('Escribe un celular válido (10 dígitos que empiezan por 3)', 'aviso');
     setConsultando(true);
     try {
       setSaldo(await api.get(`/api/public/puntos/${normalizarCelular(f.celular)}`));
     } catch (e) {
-      toast(e.message);
+      toast(e.message, 'error');
       setSaldo(null);
     } finally {
       setConsultando(false);

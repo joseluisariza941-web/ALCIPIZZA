@@ -20,7 +20,7 @@ final class Ajustes
             'mesas' => Z::opcional(Z::numero(entero: true, min: [0, 'Número de mesas no válido'], max: [200, null])),
             'h' => Z::opcional(Z::arreglo(Z::nulable(Z::tupla([$hora, $hora])),
                 largo: [7, 'Debe haber horario para los 7 días (lunes a domingo)'])),
-            'logo' => Z::opcional(Z::texto(max: [3_000_000, null])), // URL o imagen en data URL
+            'logo' => Z::opcional(Z::texto(max: [3_000_000, null])), // URL, ruta propia o imagen en data URL
             'bg' => Z::opcional(Z::texto(max: [3_000_000, null])),
             'sonido' => Z::opcional(Z::enumeracion(Config::SONIDOS, 'Sonido no válido (' . implode(', ', Config::SONIDOS) . ')')),
             'domiciliosActivos' => Z::opcional(Z::booleano()),
@@ -40,6 +40,17 @@ final class Ajustes
                 [['path' => ['qrUrl'], 'message' => 'La imagen del QR no es válida']]);
         }
         return $qr;
+    }
+
+    /** Logo y fondo: vacío, ruta propia (/...), https o data URL de imagen que no sea SVG. Solo se valida al guardar. */
+    private static function revisarImagen(?string $v, string $campo): void
+    {
+        if ($v === null || $v === '') return;
+        $ok = preg_match('#^(https://\S+|/(?!/)\S*|data:image/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+=*)$#', $v);
+        if (!$ok) {
+            throw new HttpError(400, 'La imagen no es válida (usa PNG, JPG, WEBP o GIF, una dirección https o una ruta propia)', 'VALIDACION',
+                [['path' => [$campo], 'message' => 'La imagen no es válida']]);
+        }
     }
 
     private static function qrSchema(): \Closure { return Z::opcional(Z::nulable(Z::texto(trim: true, max: [700_000, null]))); }
@@ -96,6 +107,7 @@ final class Ajustes
         $r->put('/api/config', function (Request $req) {
             Auth::rol($req, 'cocina');
             $cambios = Z::validar(self::configSchema(), $req->body);
+            foreach (['logo', 'bg'] as $k) if (array_key_exists($k, $cambios)) self::revisarImagen($cambios[$k], $k);
             $cfg = array_replace(Config::leer(), $cambios);
             Config::guardar($cfg);
             Bitacora::registrar($req, 'Cambió los ajustes (' . (implode(', ', array_keys($cambios)) ?: 'sin cambios') . ')');

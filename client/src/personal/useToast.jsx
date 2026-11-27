@@ -1,13 +1,15 @@
+import { emitirAlerta } from '../components/Alertas.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Aviso flotante como toast() original (clase .toast, 3,5 s).
- * @returns {{ toast: import('react').ReactNode, aviso: (texto:string) => void }}
+ * @returns {{ toast: import('react').ReactNode, aviso: (texto:string, tipo?:string) => void }}
  */
 export function useToast() {
   const [texto, setTexto] = useState('');
   const t = useRef(/** @type {any} */ (null));
-  const aviso = useCallback(msg => {
+  const aviso = useCallback((msg, tipo = 'info') => {
+    if (emitirAlerta(tipo, msg)) return;
     clearTimeout(t.current);
     setTexto(msg);
     t.current = setTimeout(() => setTexto(''), 3500);

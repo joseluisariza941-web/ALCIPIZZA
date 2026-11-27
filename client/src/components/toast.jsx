@@ -2,14 +2,16 @@
 // <ToastHost /> va montado dentro de <Shell>; si no hay ninguno montado, toast() crea el aviso directo en el body.
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { emitirAlerta } from './Alertas.jsx';
 
 const DURACION = 3500;
 /** @type {Set<(t:string)=>void>} */
 const hosts = new Set();
 let seq = 0;
 
-/** Muestra un aviso. @param {string} texto */
-export function toast(texto) {
+/** Muestra un aviso. Con el sistema de alertas montado lo muestra allí (tipo: exito|error|info|aviso). @param {string} texto @param {string} [tipo] */
+export function toast(texto, tipo = 'info') {
+  if (emitirAlerta(tipo, texto)) return;
   if (hosts.size) { hosts.forEach(f => f(texto)); return; }
   const e = document.createElement('div');
   e.className = 'toast';

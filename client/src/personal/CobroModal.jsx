@@ -1,6 +1,7 @@
 // Cobro del pedido: método de pago y, si los puntos están activos, canje en caja. Lo usan mesera y cocina.
 import { useState } from 'react';
 import { api } from '../api.js';
+import { useAlertas } from '../components/Alertas.jsx';
 import { celularValido, normalizarCelular } from '../cliente/carrito.js';
 import { Modal } from './componentes.jsx';
 import { pesos } from './formato.js';
@@ -24,6 +25,7 @@ export function maxCanjes(saldo, total, p) {
  *   onCobrado?:(pedido:any)=>void, onCerrar:()=>void }} p
  */
 export default function CobroModal({ o, pagos, puntos, onCobrado, onCerrar }) {
+  const alertas = useAlertas();
   const activo = !!puntos?.activo;
   const [celular, setCelular] = useState(o.celular || '');
   const [saldo, setSaldo] = useState(/** @type {number|null} */ (null));
@@ -60,6 +62,7 @@ export default function CobroModal({ o, pagos, puntos, onCobrado, onCerrar }) {
     setEnviando(true); setError('');
     try {
       const p = await api.post(`/api/pedidos/${o.id}/pago`, body);
+      alertas.exito(`Pedido #${o.id} cobrado`);
       onCobrado?.(p);
       if (p?.descuentoPuntos > 0) setHecho(p); else onCerrar();
     } catch (e) {

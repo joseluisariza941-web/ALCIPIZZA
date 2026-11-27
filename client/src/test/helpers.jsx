@@ -32,7 +32,7 @@ function jsonResponse(status, body) {
 /**
  * Renderiza con router en memoria y un usuario de sesión opcional.
  * @param {import('react').ReactElement} ui
- * @param {{ route?: string, user?: null | { id:number, usuario:string, nombre:string, rol:'dev'|'cocina'|'mesera' } }} [o]
+ * @param {{ route?: string, user?: null | { id:number, usuario:string, nombre:string, rol:'dev'|'cocina'|'mesera'|'superadmin' } }} [o]
  */
 export function renderWith(ui, { route = '/', user = null } = {}) {
   const auth = { user, loading: false, login: vi.fn(), logout: vi.fn(), refresh: vi.fn(), setUser: vi.fn() };

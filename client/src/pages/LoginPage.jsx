@@ -1,10 +1,10 @@
-﻿// Acceso del personal (login() y entrar() de la app original) + cambio de contraseña obligatorio.
-import { useState } from 'react';
+// Acceso del personal (login() y entrar() de la app original) + cambio de contraseña obligatorio.
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { INICIO, useAuth } from '../auth/AuthContext.jsx';
 import Shell from '../components/Shell.jsx';
-import { mensajeErrorLogin, validarCambioClave } from '../personal/login.js';
+import { CLAVE_SESION_EXPIRADA, MSG_CAMPOS_VACIOS, MSG_SESION_EXPIRADA, mensajeErrorLogin, validarCambioClave } from '../personal/login.js';
 import { useToast } from '../personal/useToast.jsx';
 
 export default function LoginPage() {
@@ -24,11 +24,12 @@ export default function LoginPage() {
       <div data-testid="pagina-login">
         {porCambiar
           ? <CambiarClave aviso={aviso} onListo={() => { const u = { ...porCambiar, debeCambiarClave: false }; setUser(u); alPanel(u); }} />
-          : <Acceso aviso={aviso} onEntrar={async (usuario, clave) => {
+          : <Acceso onEntrar={async (usuario, clave) => {
             try {
               const u = await login(usuario, clave);
               if (u.debeCambiarClave) setPendiente(u); else alPanel(u);
-            } catch (e) { aviso(mensajeErrorLogin(e)); }
+            } catch (e) { return mensajeErrorLogin(e); }
+            return '';
           }} />}
       </div>
       {toast}
@@ -36,18 +37,29 @@ export default function LoginPage() {
   );
 }
 
-/** @param {{ aviso:(t:string)=>void, onEntrar:(u:string, c:string)=>Promise<void> }} p */
-function Acceso({ aviso, onEntrar }) {
+/** @param {{ onEntrar:(u:string, c:string)=>Promise<string> }} p  onEntrar devuelve el mensaje de error, o '' si entró. */
+function Acceso({ onEntrar }) {
   const [usuario, setUsuario] = useState('');
   const [clave, setClave] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [mensaje, setMensaje] = useState('');
+
+  // Si api.js mandó al login por una sesión vencida, lo explica una sola vez.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(CLAVE_SESION_EXPIRADA)) {
+        sessionStorage.removeItem(CLAVE_SESION_EXPIRADA);
+        setMensaje(MSG_SESION_EXPIRADA);
+      }
+    } catch { /* almacenamiento bloqueado */ }
+  }, []);
 
   const entrar = async () => {
     const u = usuario.trim().toLowerCase();
-    if (!u || !clave) return aviso('Escribe el usuario y la contraseña');
+    if (!u || !clave) return setMensaje(MSG_CAMPOS_VACIOS);
     if (enviando) return;
-    setEnviando(true);
-    try { await onEntrar(u, clave); } finally { setEnviando(false); }
+    setEnviando(true); setMensaje('');
+    try { setMensaje(await onEntrar(u, clave)); } finally { setEnviando(false); }
   };
 
   return (
@@ -57,7 +69,8 @@ function Acceso({ aviso, onEntrar }) {
       <label>Usuario<input autoComplete="username" value={usuario} onChange={e => setUsuario(e.target.value)} /></label>
       <label>Contraseña<input type="password" autoComplete="current-password" value={clave}
         onChange={e => setClave(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') entrar(); }} /></label>
-      <button className="btn" style={{ width: '100%', marginTop: '1rem' }} disabled={enviando} onClick={entrar}>Entrar</button>
+      <button className="btn" style={{ width: '100%', marginTop: '1rem' }} disabled={enviando} onClick={entrar}>{enviando ? 'Entrando…' : 'Entrar'}</button>
+      {mensaje && <p role="alert" className="aviso-login">{mensaje}</p>}
     </div>
   );
 }

@@ -22,6 +22,9 @@ spl_autoload_register(function (string $clase): void {
     }
 })();
 
+// fuera de desarrollo y pruebas, los errores de PHP nunca se muestran en la respuesta
+if (!in_array(env('APP_ENV'), ['development', 'dev', 'local', 'test'], true)) ini_set('display_errors', '0');
+
 date_default_timezone_set('America/Bogota');
 mb_internal_encoding('UTF-8');
 

@@ -70,12 +70,12 @@ describe('Fase 3 · B7 el cliente cancela su pedido', () => {
     expect((await db('pedidos').where({ id: p.id }).first()).estado).toBe('preparando');
   });
 
-  it('devuelve los puntos canjeados y quita los ganados', async () => {
+  it('cuando la cocina cancela un pedido pagado devuelve los puntos canjeados y quita los ganados', async () => {
     await db('puntos_clientes').insert({ celular: '3001234567', saldo: 100 });
     const p = await nuevo({ celular: '3001234567' });
     await send(ana, 'post', `/api/pedidos/${p.id}/pago`, { metodoPago: 'nq', canjearPuntos: 100 }).expect(200);
     expect((await db('puntos_clientes').where({ celular: '3001234567' }).first()).saldo).toBe(Math.floor((precio() - 1000) / 1000));
-    await cancelar(p).expect(200);
+    await send(admin, 'patch', `/api/pedidos/${p.id}/estado`, { estado: 'cancelado' }).expect(200);
     expect((await db('puntos_clientes').where({ celular: '3001234567' }).first()).saldo).toBe(100);
   });
 

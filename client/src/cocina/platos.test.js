@@ -15,7 +15,7 @@ describe('validarPlato (saveP original)', () => {
       nombre: 'Hamburguesa', emoji: '🍔', categoria: 'Hamburguesas', imagenUrl: '',
       variantes: [{ nombre: 'Sencilla', precio: 12000, multiplicador: 1 }],
       ingredientes: [{ insumoId: 2, cantidad: 0.15, unidad: 'kg' }],
-      salsas: ['Ketchup'], extras: [4],
+      salsas: [3], extras: [4],
     } });
   });
   it('consumo vacío o 0 equivale a 1 y el emoji por defecto es 🍽️', () => {
@@ -39,6 +39,9 @@ describe('validarPlato (saveP original)', () => {
       .toEqual({ error: 'El insumo "Pan" no existe: ingrésalo primero en Inventario' });
     expect(validarPlato(form({ ingredientes: [{ insumo: 'Carne', cantidad: '1', unidad: 'und' }] }), insumos))
       .toEqual({ error: '"Carne" se mide en kg: usa el mismo tipo de unidad' });
+  });
+  it('la salsa debe existir en Inventario', () => {
+    expect(validarPlato(form({ salsas: ['Mostaza'] }), insumos)).toEqual({ error: 'La salsa "Mostaza" no existe en Inventario' });
   });
   it('las bebidas usan 1 unidad del producto, sin salsas ni ingredientes obligatorios', () => {
     const r = validarPlato(form({ categoria: 'bebidas', bebidaInsumo: 'Gaseosa' }), insumos);
@@ -71,7 +74,7 @@ describe('conversión de platos', () => {
     expect(platoABody(platos[0], [])).toEqual({
       nombre: 'Pizza', emoji: '🍕', categoria: 'Pizzas', imagenUrl: '',
       variantes: [{ id: 1, nombre: 'Pequeña', precio: 16000, multiplicador: 1 }],
-      ingredientes: [{ insumoId: 1, cantidad: 100, unidad: 'g' }], salsas: ['Ketchup'], extras: [],
+      ingredientes: [{ insumoId: 1, cantidad: 100, unidad: 'g' }], salsas: [3], extras: [],
     });
   });
   it('idsExtras acepta objetos o ids', () => {

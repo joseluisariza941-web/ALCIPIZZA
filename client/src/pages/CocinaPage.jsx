@@ -14,6 +14,7 @@ import Promociones from '../cocina/Promociones.jsx';
 import Clientes from '../cocina/Clientes.jsx';
 import { fijarSonido } from '../cocina/sonido.js';
 import { api } from '../api.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 
 const TABS = [['', 'Pedidos'], ['inventario', 'Inventario'], ['surtidores', 'Surtidores'], ['comidas', 'Comidas'],
   ['promociones', 'Promociones'], ['clientes', 'Clientes'], ['reporte', 'Reporte'], ['personal', 'Personal'], ['ajustes', 'Ajustes']];
@@ -22,6 +23,7 @@ const TABS = [['', 'Pedidos'], ['inventario', 'Inventario'], ['surtidores', 'Sur
 export default function CocinaPage() {
   const { pedidos, recargar } = usePedidos();
   const nav = useNavigate();
+  const { user } = useAuth();
   useEffect(() => { api.get('/api/config').then(c => fijarSonido(c?.sonido)).catch(() => {}); }, []);
   const actual = useLocation().pathname.replace(/^\/cocina\/?/, '').split('/')[0];
   const act = pedidos.filter(o => o.estado === 'nuevo' || o.estado === 'preparando').length;
@@ -35,6 +37,7 @@ export default function CocinaPage() {
               {k === '' && act ? `${l} (${act})` : l}
             </button>
           ))}
+          {user?.rol === 'superadmin' && <button className="btn s" onClick={() => nav('/dev')}>Desarrollador</button>}
         </div>
         <Routes>
           <Route index element={<Pedidos pedidos={pedidos} recargar={recargar} />} />

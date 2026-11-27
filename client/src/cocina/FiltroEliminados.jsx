@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useCarga } from './hooks.js';
 import { fd } from './util.js';
-import { toast, toastError } from './toast.js';
+import { exito, toastError } from './toast.js';
 
 /** Aviso que explica que eliminar solo oculta. */
 export const textoOcultar = que => `¿Eliminar ${que}?\n\nSe oculta y se puede restaurar desde "Ver eliminados".`;
@@ -26,7 +26,7 @@ export default function FiltroEliminados({ ruta, nombre, etiqueta = 'Ver elimina
   async function volver(x) {
     try {
       await api.post(`${ruta}/${id(x)}/restaurar`, {});
-      toast('Restaurado');
+      exito('Restaurado');
     } catch (e) { toastError(e); }
     await recargar();
     onRestaurado?.();

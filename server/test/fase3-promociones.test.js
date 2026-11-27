@@ -166,4 +166,11 @@ describe('Fase 3 · B11 menú, config pública y cotización', () => {
     expect((await db('pedidos').count({ n: '*' }).first()).n).toBe(antes);
     await send(c, 'post', '/api/pedidos/cotizar', { destino: 'Recoger en local', items: [] }).expect(400);
   });
+
+  it('POST /api/pedidos/cotizar acepta solo los items, como lo manda el cliente web', async () => {
+    await crear();
+    const { items } = web();
+    const q = await send(await agente(app), 'post', '/api/pedidos/cotizar', { items }).expect(200);
+    expect(q.body.descuentoPromo).toBe(Math.round(precio() * 0.1));
+  });
 });

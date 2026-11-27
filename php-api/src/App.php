@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Alci;
 
-use Alci\Core\{Csrf, Db, HttpError, Request, Respuesta, Router, Sesion};
+use Alci\Core\{Csrf, Db, HttpError, RateLimit, Request, Respuesta, Router, Sesion};
 
 /** Equivalente a server/src/app.js: cabeceras, sesión, CSRF, rutas y manejo de errores. */
 final class App
@@ -40,15 +40,26 @@ final class App
         $r = new Router();
         $r->get('/api/health', function () {
             try {
-                $v = Db::valor('SELECT VERSION()');
-                $n = (int) Db::valor('SELECT COUNT(*) FROM platos');
-                return Respuesta::con(200, ['ok' => true, 'mysql' => $v, 'platos' => $n]);
+                Db::valor('SELECT 1');
+                return Respuesta::con(200, ['ok' => true]);
             } catch (\Throwable) {
                 return Respuesta::con(503, ['ok' => false, 'error' => 'Base de datos no disponible']);
             }
         });
         foreach (self::MODULOS as $m) $m::registrar($r);
         return $r;
+    }
+
+    /** Limpieza de datos técnicos efímeros (sesiones vencidas, contadores de límites): 1 de cada 100 peticiones. */
+    private static function limpiezaOcasional(): void
+    {
+        if (env('ALCI_LIMPIEZA') !== 'siempre' && random_int(1, 100) !== 1) return;
+        try {
+            Sesion::limpiarVencidas();
+            RateLimit::limpiarVencidos();
+        } catch (\Throwable $e) {
+            error_log('[alcipizza] limpieza: ' . $e);
+        }
     }
 
     public static function correr(): void
@@ -81,6 +92,7 @@ final class App
         }
         try {
             if ($sesionIniciada) Sesion::cerrar();
+            self::limpiezaOcasional();
         } catch (\Throwable $e) {
             error_log('[alcipizza] sesión: ' . $e);
         }

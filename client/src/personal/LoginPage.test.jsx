@@ -51,24 +51,54 @@ describe('LoginPage', () => {
   });
 
   it.each([
-    [new ApiError(401, 'x', {}), 'Usuario o contraseña incorrectos'],
-    [new ApiError(423, 'x', {}), /bloqueado temporalmente/i],
-    [new ApiError(429, 'x', {}), /demasiados intentos/i],
-    [new ApiError(403, 'x', { code: 'SUSPENDIDO' }), 'El servicio está suspendido. Contacta al desarrollador.'],
-  ])('muestra el error del servidor (%s)', async (err, texto) => {
+    ['401', new ApiError(401, 'Usuario o contraseña incorrectos', {}), 'Usuario o contraseña incorrectos'],
+    ['423 con mensaje del servidor', new ApiError(423, 'Bloqueado 15 minutos por el servidor', { code: 'BLOQUEADO' }), 'Bloqueado 15 minutos por el servidor'],
+    ['423 sin mensaje', new ApiError(423, 'Error 423', {}), /bloqueada temporalmente.*unos minutos/i],
+    ['429', new ApiError(429, 'x', { code: 'LIMITE' }), /demasiados intentos/i],
+    ['suscripción inactiva', new ApiError(403, 'x', { code: 'SUSPENDIDO' }), /suscripción.*inactiva/i],
+    ['sin conexión', new TypeError('Failed to fetch'), /sin conexión/i],
+    ['500', new ApiError(500, 'Error interno', {}), /error inesperado/i],
+  ])('muestra un aviso con role=alert: %s', async (_n, err, texto) => {
     const { auth } = renderWith(rutas, { route: '/personal' });
     auth.login.mockRejectedValue(err);
     const u = await escribir('ana', 'mala');
     await u.keyboard('{Enter}');
-    expect(await screen.findByRole('status')).toHaveTextContent(texto);
+    expect(await screen.findByRole('alert')).toHaveTextContent(texto);
     expect(screen.queryByText('panel mesera')).not.toBeInTheDocument();
+  });
+
+  it('el aviso del 401 no revela si el usuario existe', async () => {
+    const { auth } = renderWith(rutas, { route: '/personal' });
+    auth.login.mockRejectedValue(new ApiError(401, 'x', {}));
+    const u = await escribir('nadie', 'x');
+    await u.keyboard('{Enter}');
+    expect((await screen.findByRole('alert')).textContent).not.toMatch(/no existe|no encontrado|inexistente/i);
+  });
+
+  it('deshabilita el botón y dice "Entrando…" mientras envía', async () => {
+    const { auth } = renderWith(rutas, { route: '/personal' });
+    let soltar;
+    auth.login.mockReturnValue(new Promise(r => { soltar = r; }));
+    const u = await escribir('ana', 'x');
+    await u.click(screen.getByRole('button', { name: 'Entrar' }));
+    const b = await screen.findByRole('button', { name: 'Entrando…' });
+    expect(b).toBeDisabled();
+    soltar(ANA);
+    expect(await screen.findByText('panel mesera')).toBeInTheDocument();
+  });
+
+  it('avisa si la sesión expiró (marca de api.js) y la borra', async () => {
+    sessionStorage.setItem('alci:sesion-expirada', '1');
+    renderWith(rutas, { route: '/personal' });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tu sesión expiró, vuelve a entrar');
+    expect(sessionStorage.getItem('alci:sesion-expirada')).toBeNull();
   });
 
   it('pide usuario y contraseña antes de enviar', async () => {
     const { auth } = renderWith(rutas, { route: '/personal' });
     await userEvent.setup().click(screen.getByRole('button', { name: 'Entrar' }));
     expect(auth.login).not.toHaveBeenCalled();
-    expect(await screen.findByRole('status')).toHaveTextContent('Escribe el usuario y la contraseña');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Escribe el usuario y la contraseña');
   });
 
   it('con sesión abierta redirige al panel', async () => {

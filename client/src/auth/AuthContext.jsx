@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { api, resetCsrf } from '../api.js';
 
 /**
- * @typedef {{ id:number, usuario:string, nombre:string, rol:'dev'|'cocina'|'mesera', debeCambiarClave?:boolean }} Usuario
+ * @typedef {{ id:number, usuario:string, nombre:string, rol:'dev'|'cocina'|'mesera'|'superadmin', debeCambiarClave?:boolean }} Usuario
  * @typedef {{ user: Usuario|null, loading:boolean, login:(usuario:string, clave:string)=>Promise<Usuario>,
  *   logout:()=>Promise<void>, refresh:()=>Promise<void>, setUser:(u:Usuario|null)=>void }} Auth
  */
@@ -13,7 +13,7 @@ export const AuthContext = createContext(/** @type {any} */ (null));
 export const useAuth = () => useContext(AuthContext);
 
 /** Panel de inicio de cada rol. */
-export const INICIO = { cocina: '/cocina', mesera: '/mesera', dev: '/dev' };
+export const INICIO = { cocina: '/cocina', mesera: '/mesera', dev: '/dev', superadmin: '/cocina' };
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(/** @type {Usuario|null} */ (null));

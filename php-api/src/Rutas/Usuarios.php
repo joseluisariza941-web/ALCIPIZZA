@@ -19,11 +19,24 @@ use Alci\Servicios\Zod;
 final class Usuarios
 {
     /** Roles que puede gestionar cada rol. */
-    private const GESTIONA = ['cocina' => ['mesera'], 'dev' => ['cocina', 'mesera']];
+    private const GESTIONA = [
+        'cocina' => ['mesera'],
+        'dev' => ['cocina', 'mesera'],
+        'superadmin' => ['superadmin', 'dev', 'cocina', 'mesera'],
+    ];
 
     private static function puedeTocar(array $yo, array $t): bool
     {
-        return in_array($t['rol'], self::GESTIONA[$yo['rol']] ?? [], true) || ($yo['rol'] === 'dev' && (int) $t['id'] === (int) $yo['id']);
+        return in_array($t['rol'], self::GESTIONA[$yo['rol']] ?? [], true)
+            || (in_array($yo['rol'], ['dev', 'superadmin'], true) && (int) $t['id'] === (int) $yo['id']);
+    }
+
+    /** Impide dejar el sistema sin ningún superadmin activo al borrar o desactivar a $t. */
+    private static function noDejarSinSuperadmin(array $t): void
+    {
+        if ($t['rol'] !== 'superadmin') return;
+        $otros = (int) Db::valor("SELECT COUNT(*) FROM usuarios WHERE rol = 'superadmin' AND activo = 1 AND eliminado_en IS NULL AND id <> ?", [(int) $t['id']]);
+        if ($otros === 0) throw new HttpError(400, 'Debe quedar al menos un superadmin activo');
     }
 
     private static function objetivo(Request $req, array $params): array
@@ -70,9 +83,9 @@ final class Usuarios
             $yo = Auth::rol($req, 'cocina', 'dev');
             $z = new Zod($req->body);
             $b = self::campos($z, false);
-            $b['rol'] = $z->enumeracion('rol', ['dev', 'cocina', 'mesera'], 'Rol no válido');
+            $b['rol'] = $z->enumeracion('rol', ['dev', 'cocina', 'mesera', 'superadmin'], 'Rol no válido');
             $z->fin();
-            if (!in_array($b['rol'], self::GESTIONA[$yo['rol']], true)) throw new HttpError(403, 'No puedes crear usuarios con ese rol', 'PROHIBIDO');
+            if (!in_array($b['rol'], self::GESTIONA[$yo['rol']] ?? [], true)) throw new HttpError(403, 'No puedes crear usuarios con ese rol', 'PROHIBIDO');
             self::libre($b['usuario']);
             $id = Db::insertar('usuarios', [
                 'usuario' => $b['usuario'], 'nombre' => $b['nombre'], 'rol' => $b['rol'],
@@ -95,6 +108,7 @@ final class Usuarios
             if ($b['nombre'] !== null) $fila['nombre'] = $b['nombre'];
             if ($b['activo'] !== null) {
                 if (!$b['activo'] && $tid === (int) $yo['id']) throw new HttpError(400, 'No puedes desactivarte a ti mismo');
+                if (!$b['activo']) self::noDejarSinSuperadmin($t);
                 $fila['activo'] = $b['activo'] ? 1 : 0;
             }
             if ($b['clave'] !== null) {
@@ -122,6 +136,7 @@ final class Usuarios
             $yo = Auth::rol($req, 'cocina', 'dev');
             $t = self::objetivo($req, $params);
             if ((int) $t['id'] === (int) $yo['id']) throw new HttpError(400, 'No puedes borrarte a ti mismo');
+            self::noDejarSinSuperadmin($t);
             Sesion::cerrarDe((int) $t['id']);
             Db::ejecutar('UPDATE usuarios SET eliminado_en = NOW() WHERE id = ?', [(int) $t['id']]);
             Bitacora::registrar($req, "Eliminó al usuario {$t['nombre']} ({$t['usuario']})");

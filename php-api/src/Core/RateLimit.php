@@ -30,6 +30,12 @@ final class RateLimit
         Db::ejecutar('UPDATE limites SET conteo = GREATEST(conteo - 1, 0) WHERE clave = ?', [$clave]);
     }
 
+    /** Borra los contadores cuya ventana ya terminó (datos técnicos efímeros). */
+    public static function limpiarVencidos(): int
+    {
+        return Db::ejecutar('DELETE FROM limites WHERE reinicia_en <= ?', [time()]);
+    }
+
     /** Lanza 429 LIMITE si se pasó. */
     public static function exigir(string $nombre, int $max, int $ventanaSeg, string $ip, string $mensaje): void
     {

@@ -7,7 +7,7 @@ import { diaApi } from './util.js';
 import { configBody, fijarHora, metodoBody, qrCabe } from './ajustes.js';
 import { leerImagen } from './imagen.js';
 import { SONIDOS, beep, fijarSonido } from './sonido.js';
-import { toast, toastError } from './toast.js';
+import { exito, toastError } from './toast.js';
 
 const TEXTOS = [['n', 'Nombre del negocio'], ['w1', 'Título principal'], ['w2', 'Subtítulo'], ['w3', 'Mensaje destacado'], ['w4', 'Sello (Todo a tu gusto)']];
 const PELIGRO = { background: '#c4161c', color: '#fff' };
@@ -40,7 +40,7 @@ function ReiniciarReportes({ onCerrar, onListo }) {
   const [txt, setTxt] = useState('');
   const [res, setRes] = useState(/** @type {any} */ (null));
   async function enviar() {
-    try { setRes(await api.post('/api/admin/reiniciar-reportes', { confirmar: 'BORRAR' })); onListo?.(); } catch (e) { toastError(e); }
+    try { setRes(await api.post('/api/admin/reiniciar-reportes', { confirmar: 'BORRAR' })); exito('Reportes reiniciados'); onListo?.(); } catch (e) { toastError(e); }
   }
   return (
     <Modal>
@@ -87,13 +87,13 @@ export default function Ajustes() {
     try {
       await api.put('/api/config', configBody(f));
       fijarSonido(f.sonido);
-      toast('✅ Cambios guardados');
+      exito('✅ Cambios guardados');
       refrescar();
     } catch (e) { toastError(e); }
   }
 
   async function imagen(k, valor, aviso) {
-    try { await api.put('/api/config', { [k]: valor }); if (aviso) toast(aviso); refrescar(); } catch (e) { toastError(e); }
+    try { await api.put('/api/config', { [k]: valor }); if (aviso) exito(aviso); refrescar(); } catch (e) { toastError(e); }
   }
   async function subir(e, k, max, tipo, aviso) {
     const file = e.target.files?.[0];
@@ -102,7 +102,7 @@ export default function Ajustes() {
   }
 
   async function cambiarMetodo(m, cambio) {
-    try { await api.put(`/api/metodos-pago/${m.codigo}`, metodoBody(m, cambio)); } catch (e) { toastError(e); }
+    try { await api.put(`/api/metodos-pago/${m.codigo}`, metodoBody(m, cambio)); exito('Método de pago actualizado'); } catch (e) { toastError(e); }
     mp.recargar(); pub.recargar?.();
   }
   async function subirQr(m, e) {
@@ -116,11 +116,11 @@ export default function Ajustes() {
   }
   async function eliminarMetodo(m) {
     if (!confirm(`¿Eliminar el método de pago ${m.nombre}?`)) return;
-    try { await api.del(`/api/metodos-pago/${m.codigo}`); } catch (e) { toastError(e); }
+    try { await api.del(`/api/metodos-pago/${m.codigo}`); exito('Método de pago eliminado'); } catch (e) { toastError(e); }
     mp.recargar(); pub.recargar?.();
   }
   async function restaurarMetodo(m) {
-    try { await api.post(`/api/metodos-pago/${m.codigo}/restaurar`, {}); toast('Método restaurado'); } catch (e) { toastError(e); }
+    try { await api.post(`/api/metodos-pago/${m.codigo}/restaurar`, {}); exito('Método restaurado'); } catch (e) { toastError(e); }
     mp.recargar(); pub.recargar?.();
   }
   const puntos = !!f.puntosActivos;

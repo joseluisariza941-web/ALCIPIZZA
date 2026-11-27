@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useCarga } from './hooks.js';
 import { isBebida, money } from './util.js';
 import { pillIngrediente } from './platos.js';
-import { toastError } from './toast.js';
+import { exito, toastError } from './toast.js';
 import PlatoModal from './PlatoModal.jsx';
 import Extras from './Extras.jsx';
 import FiltroEliminados, { textoOcultar } from './FiltroEliminados.jsx';
@@ -27,7 +27,7 @@ function Platos({ platos, onEditar, onBorrar, onRestaurado }) {
                     ? (p.ingredientes?.[0] && <div className="pills"><span className="pl ig2">📦 {p.ingredientes[0].nombre}</span></div>)
                     : <>
                       <div className="pills">{(p.ingredientes ?? []).map(g => <span key={g.insumoId ?? g.nombre} className="pl ig2">{pillIngrediente(g)}</span>)}</div>
-                      <div className="pills">{(p.salsas ?? []).map(k => <span key={k} className="pl">🥫 {k}</span>)}</div>
+                      <div className="pills">{(p.salsas ?? []).map(k => { const n = typeof k === 'string' ? k : k.nombre; return <span key={typeof k === 'string' ? k : k.insumoId} className="pl">🥫 {n}</span>; })}</div>
                     </>}
                 </td>
                 <td>
@@ -56,7 +56,7 @@ export default function Comidas() {
 
   async function borrar(p) {
     if (!confirm(textoOcultar('este plato'))) return;
-    try { await api.del(`/api/admin/platos/${p.id}`); } catch (e) { toastError(e); }
+    try { await api.del(`/api/admin/platos/${p.id}`); exito('Plato eliminado'); } catch (e) { toastError(e); }
     pl.recargar();
   }
 

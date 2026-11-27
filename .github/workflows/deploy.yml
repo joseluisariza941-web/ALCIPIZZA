@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy
   cancel-in-progress: false
@@ -15,7 +18,7 @@ jobs:
   deploy:
     name: Desplegar en Hostinger
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     env:
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -88,7 +91,14 @@ jobs:
           ' > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
           ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null
-          ssh-keyscan -T 10 -p "$SSH_PORT" "$SSH_HOST" >> "$HOME/.ssh/known_hosts"
+          # Solo se acepta el servidor si su huella coincide con la conocida.
+          ssh-keyscan -T 10 -t ed25519 -p "$SSH_PORT" "$SSH_HOST" > "$RUNNER_TEMP/host.pub" 2>/dev/null
+          huella="$(ssh-keygen -lf "$RUNNER_TEMP/host.pub" | awk '{print $2}')"
+          if [ "$huella" != "SHA256:9GjppafplIsK2y3y6EhqTEJHMuItHua1tI032zaurJU" ]; then
+            echo "::error::La huella del servidor no coincide ($huella)"
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/host.pub" >> "$HOME/.ssh/known_hosts"
 
       - name: Subir public_html
         if: steps.secretos.outputs.omitir != 'true'

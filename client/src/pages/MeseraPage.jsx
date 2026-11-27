@@ -1,4 +1,4 @@
-﻿// Panel de la mesera (mesera() de la app original): tomar pedidos, historial, cobro, tirilla y WhatsApp.
+// Panel de la mesera (mesera() de la app original): tomar pedidos, historial, cobro, tirilla y WhatsApp.
 // El nombre de la mesera y el botón Salir los pone <Shell> en el encabezado, como el original.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
@@ -35,7 +35,7 @@ export default function MeseraPage() {
   const previos = useRef(/** @type {any[]|null} */ (null));
 
   useEffect(() => {
-    api.get('/api/menu').then(setMenu).catch(() => aviso('No se pudo cargar el menú'));
+    api.get('/api/menu').then(setMenu).catch(() => aviso('No se pudo cargar el menú', 'error'));
     api.get('/api/public/config').then(r => setCfg(c => ({ config: r.config, pagos: r.pagos || [], puntos: { ...c.puntos, ...(r.puntos || {}) } }))).catch(() => {});
   }, [aviso]);
 
@@ -57,7 +57,7 @@ export default function MeseraPage() {
 
   const enviar = () => {
     const error = validarPedido(cart, datos);
-    if (error) return aviso(error);
+    if (error) return aviso(error, 'aviso');
     setModal({ tipo: 'conf' });
   };
 
@@ -67,24 +67,25 @@ export default function MeseraPage() {
     const body = cuerpoPedido(cart, datos);
     try {
       const pedido = edit ? await api.put(`/api/pedidos/${edit}`, body) : (await api.post('/api/pedidos', body)).pedido;
+      aviso(edit ? 'Pedido actualizado' : 'Pedido enviado a cocina', 'exito');
       limpiar();
       setModal({ tipo: 'recibo', pedido });
       cargarPedidos();
     } catch (e) {
       setModal(null);
-      aviso(e.status === 409 ? 'Este pedido ya no se puede editar: cocina ya lo está preparando' : e.message);
+      aviso(e.status === 409 ? 'Este pedido ya no se puede editar: cocina ya lo está preparando' : e.message, 'error');
     } finally { setEnviando(false); }
   };
 
   const accion = async (fn, ok) => {
-    try { await fn(); if (ok) aviso(ok); } catch (e) { aviso(e.message); }
+    try { await fn(); if (ok) aviso(ok, 'exito'); } catch (e) { aviso(e.message, 'error'); }
     cargarPedidos();
   };
 
   const acciones = {
     onCobrar: o => setModal({ tipo: 'cobrar', pedido: o }),
     onTirilla: o => setModal({ tipo: 'recibo', pedido: o }),
-    onEntregado: o => accion(() => api.patch(`/api/pedidos/${o.id}/estado`, { estado: 'entregado' })),
+    onEntregado: o => accion(() => api.patch(`/api/pedidos/${o.id}/estado`, { estado: 'entregado' }), 'Pedido entregado'),
     onEditar: o => {
       setEdit(o.id);
       setCart(carritoDesdePedido(o, menu));
